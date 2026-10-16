@@ -5,13 +5,33 @@
 #include <cmath>
 #include <fstream>
 #include <limits>
+#include <set>
 #include <sstream>
 #include <stdexcept>
+#include <vector>
 
 namespace project10::io {
 namespace {
 
 using json = nlohmann::json;
+
+// 解析後には重複キーが消えるため、各オブジェクトの解析中に確認する。
+json parseConfig(const std::string& text) {
+  std::vector<std::set<std::string>> objectKeys;
+  return json::parse(text, [&objectKeys](int, json::parse_event_t event, json& value) {
+    if (event == json::parse_event_t::object_start) {
+      objectKeys.emplace_back();
+    } else if (event == json::parse_event_t::object_end) {
+      objectKeys.pop_back();
+    } else if (event == json::parse_event_t::key) {
+      const auto& key = value.get_ref<const std::string&>();
+      if (!objectKeys.back().insert(key).second) {
+        throw std::runtime_error("Duplicate config key: " + key);
+      }
+    }
+    return true;
+  });
+}
 
 // JSONの整数は符号付き・符号なしの両方がある。小数や負数を変換で丸めない。
 std::uint64_t readNonNegativeInteger(const json& object, const std::string& fieldName) {
@@ -102,7 +122,7 @@ SimulationConfig loadConfig(int runID) {
     runDirectoryName(runID) / "config.json";
   SimulationConfig settings{};
   settings.sourceText = readConfigText(configPath);
-  const auto config = json::parse(settings.sourceText);
+  const auto config = parseConfig(settings.sourceText);
 
   // 2. 実験IDと人数を確認する。必須項目はatで取得し、欠落時は例外にする。
   settings.runID = readInteger(config, "run_id", 0);

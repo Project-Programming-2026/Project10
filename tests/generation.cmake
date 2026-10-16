@@ -117,6 +117,25 @@ elseif(CASE STREQUAL "invalid_config")
     run_program("${work}/${name}" "0" "Error:")
     no_output("${work}/${name}")
   endforeach()
+elseif(CASE STREQUAL "duplicate_keys")
+  # JSON操作で重複が消えないよう、入力文字列に直接キーを追加する。
+  string(SUBSTRING "${config}" 1 -1 members)
+  set(index 0)
+  foreach(extra IN ITEMS
+      [=["num_players":0,]=]
+      [=["num_players":8,]=]
+      [=["num_\u0070layers":8,]=]
+      [=["extra":{"value":1,"value":2},]=]
+      [=["extra":[{"value":1,"value":2}],]=])
+    math(EXPR index "${index} + 1")
+    prepare("${work}/${index}" "{${extra}${members}")
+    run_program("${work}/${index}" "0" "Duplicate config key:")
+    no_output("${work}/${index}")
+  endforeach()
+  # 別オブジェクトの同名キーは重複ではない。未使用項目も保持して許容する。
+  set(extra [=["extra":{"value":1,"child":{"value":2}},"items":[{"value":3},{"value":4}],]=])
+  prepare("${work}/valid" "{${extra}${members}")
+  run_program("${work}/valid" "0" "")
 elseif(CASE STREQUAL "overwrite")
   prepare("${work}" "${config}")
   run_program("${work}" "0" "")
