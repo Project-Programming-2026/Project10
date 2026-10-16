@@ -1,0 +1,4 @@
+# 共通入力のハッシュがOSごとの改行変換で変わらないようにする。
+samples/**/*.csv -text whitespace=cr-at-eol
+samples/**/config.json -text whitespace=cr-at-eol
+samples/**/SHA256SUMS text eol=lf

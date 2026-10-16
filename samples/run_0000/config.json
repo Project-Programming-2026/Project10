@@ -1,0 +1,39 @@
+{
+  "schema_version": "1.0",
+  "run_id": 0,
+  "num_players": 1000,
+  "matches_per_player": 200,
+  "evaluation_interval_matches_per_player": 10,
+  "rating_period_matches_per_player": 10,
+  "model": "probit_1d",
+  "ability_distribution": {
+    "type": "normal",
+    "mean": 0.0,
+    "std": 1.0
+  },
+  "performance_std": 1.0,
+  "matchmaking": "uniform_random",
+  "seeds": {
+    "ability": 2026101601,
+    "matching": 2026101602,
+    "result": 2026101603
+  },
+  "files": {
+    "players": "players.csv",
+    "matches": "matches.csv",
+    "latent_parameters": "latent_parameters.csv",
+    "ground_truth": "ground_truth.csv",
+    "predictions": {
+      "Elo": "elo.csv",
+      "Glicko": "glicko.csv",
+      "Glicko2": "glicko2.csv",
+      "TrueSkill": "trueskill.csv"
+    },
+    "mse": {
+      "Elo": "elo_mse.csv",
+      "Glicko": "glicko_mse.csv",
+      "Glicko2": "glicko2_mse.csv",
+      "TrueSkill": "trueskill_mse.csv"
+    }
+  }
+}

@@ -1,0 +1,45 @@
+# 各自の実験結果を除外する。共有用の固定サンプルはsamples/でGit管理する。
+/runs/
+# 作業前の退避・ローカル検証用ツール
+/build/
+/build-*/
+/cmake-build-*/
+/out/
+/CMakeFiles/
+/CMakeCache.txt
+/cmake_install.cmake
+/CTestTestfile.cmake
+/Testing/
+/compile_commands.json
+
+# C++の生成物
+*.o
+*.obj
+*.out
+/project10
+/simulation_tests
+*.exe
+*.dll
+*.so
+*.so.*
+*.dylib
+*.a
+*.lib
+*.pdb
+*.ilk
+*.exp
+
+# IDE・OSのローカル生成物
+.vs/
+.vscode/
+*.user
+*.suo
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Pythonのキャッシュ・ローカル環境
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
