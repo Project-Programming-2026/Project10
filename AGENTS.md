@@ -81,12 +81,14 @@
 
 ## テスト・確認方法
 
-現時点では実行可能なコード、テストランナー、ビルド設定、CIはありません。文書変更では次のGitコマンドと目視確認を使います。`git diff` は未追跡ファイルを表示しないため、新規ファイルは個別に内容を確認してください。
+現時点では実行可能なコード、テストランナー、ビルド設定、CIはありません。文書変更では次のGitコマンドと目視確認を使います。通常の `git diff` は未ステージの変更、`git diff --cached` はステージ済みの変更を対象とするため、両方を確認してください。未追跡ファイルはどちらにも表示されないため、`git status --short` で把握し、個別に内容を確認してください。
 
 ```sh
 git status --short
 git diff --check
+git diff --cached --check
 git diff -- README.md AGENTS.md .github/PULL_REQUEST_TEMPLATE.md
+git diff --cached -- README.md AGENTS.md .github/PULL_REQUEST_TEMPLATE.md
 ```
 
 リンク先・記載したパス・コマンドの実在、計画と実装状況の区別、依頼外の変更がないことを確認します。コードを追加する際は、次の観点から変更に必要なテストを整備し、実際に利用できる実行コマンドをREADMEへ追記します。
