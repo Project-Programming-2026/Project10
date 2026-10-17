@@ -18,6 +18,11 @@ struct SimulationConfig {
   std::string sourceText;
   double performanceStd;
   std::string groundTruthFile;
+  int matchesPerPlayer;
+  int ratingPeriodMatchesPerPlayer;
+  std::uint64_t matchingSeed;
+  std::uint64_t resultSeed;
+  std::string matchesFile;
 };
 
 std::string runDirectoryName(int runID);

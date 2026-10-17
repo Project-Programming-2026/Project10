@@ -1,6 +1,7 @@
 #include "project10/io/config.hpp"
 #include "project10/io/csv.hpp"
 #include "project10/simulation/latent_parameters.hpp"
+#include "project10/simulation/matches.hpp"
 #include "project10/simulation/players.hpp"
 
 #include <filesystem>
@@ -65,6 +66,10 @@ int main() {
     const auto parameters = generateLatentParameters(
       config.numPlayers, config.mean, config.stddev, config.abilitySeed
     );
+    const auto matches = generateMatches(
+      parameters, config.matchesPerPlayer, config.ratingPeriodMatchesPerPlayer,
+      config.performanceStd, config.matchingSeed, config.resultSeed
+    );
 
     // run IDを最低4桁にゼロ埋めし、この試行の結果をruns/run_XXXX/へまとめる。
     const auto outputDir = fs::path("runs") / project10::io::runDirectoryName(runID);
@@ -77,7 +82,7 @@ int main() {
         throw std::runtime_error("Output path must be a regular directory.");
       }
       std::cout << "Output directory already exists: " << outputDir.string() << '\n';
-      std::cout << "Overwrite config.json and the 3 generated CSV files? [y/N]: ";
+      std::cout << "Overwrite config.json and the 4 generated CSV files? [y/N]: ";
       std::string confirmation;
       if (!std::getline(std::cin, confirmation) ||
           (confirmation != "y" && confirmation != "Y")) {
@@ -89,7 +94,8 @@ int main() {
     // 全出力先を先に検査し、リンクやディレクトリへの書き込みで
     // run外のデータや、検査済みでない他の出力を変更することを防ぐ。
     for (const auto& name : {std::string("config.json"), config.playersFile,
-                            config.latentParametersFile, config.groundTruthFile}) {
+                            config.latentParametersFile, config.groundTruthFile,
+                            config.matchesFile}) {
       const auto path = outputDir / name;
       const auto status = fs::symlink_status(path);
       if (fs::exists(status) && !fs::is_regular_file(status)) {
@@ -103,7 +109,7 @@ int main() {
       }
     }
 
-    // プレイヤーID・潜在能力・全ペアの真の勝率を、それぞれのCSVへ保存する。
+    // プレイヤーID・潜在能力・全ペアの真の勝率・対戦履歴を別々のCSVへ保存する。
     // 潜在能力と真の勝率は生成・評価用であり、レーティング手法への入力には使わない。
 
     writePlayers(players, (outputDir / config.playersFile).string());
@@ -111,6 +117,7 @@ int main() {
     writeGroundTruth(
       parameters, config.performanceStd, (outputDir / config.groundTruthFile).string()
     );
+    writeMatches(matches, (outputDir / config.matchesFile).string());
 
     // 読み込み時点の設定全体を保存し、結果と使用した条件・シードを対応づける。
     project10::io::writeConfigSnapshot(config, outputDir);
