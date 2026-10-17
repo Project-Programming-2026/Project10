@@ -18,6 +18,7 @@ add_library(project10_core
   src/io/csv.cpp
   src/simulation/players.cpp
   src/simulation/latent_parameters.cpp
+  src/simulation/probit.cpp
 )
 target_include_directories(project10_core PUBLIC
   "${CMAKE_CURRENT_SOURCE_DIR}/include"

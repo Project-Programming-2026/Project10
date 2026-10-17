@@ -16,6 +16,8 @@ struct SimulationConfig {
   std::string playersFile;
   std::string latentParametersFile;
   std::string sourceText;
+  double performanceStd;
+  std::string groundTruthFile;
 };
 
 std::string runDirectoryName(int runID);

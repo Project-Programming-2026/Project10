@@ -41,17 +41,29 @@ int main() {
     const auto outputDir = fs::path("runs") / project10::io::runDirectoryName(runID);
     fs::create_directories("runs");
 
-    // 作成できた実行だけが書き込みへ進む。既存の空ディレクトリも上書きしない。
-    // 事前の存在確認と作成を分けず、同時実行による競合も防ぐ。
+    // 新規作成できなかった場合は、空ディレクトリでも明示的な確認を求める。
     if (!fs::create_directory(outputDir)) {
-      throw std::runtime_error("Output directory already exists: " + outputDir.string());
+      if (fs::is_symlink(outputDir) || !fs::is_directory(outputDir)) {
+        throw std::runtime_error("Output path must be a regular directory.");
+      }
+      std::cout << "Output directory already exists: " << outputDir.string() << '\n';
+      std::cout << "Overwrite config.json and the 3 generated CSV files? [y/N]: ";
+      std::string confirmation;
+      if (!std::getline(std::cin, confirmation) ||
+          (confirmation != "y" && confirmation != "Y")) {
+        std::cerr << "Overwrite cancelled." << std::endl;
+        return 1;
+      }
     }
 
-    // IDのみのplayers.csvと、ID・潜在能力を持つlatent_parameters.csvを別々に保存する。
-    // 潜在能力は生成・評価用の正解情報であり、レーティング手法への入力には使わない。
+    // プレイヤーID・潜在能力・全ペアの真の勝率を、それぞれのCSVへ保存する。
+    // 潜在能力と真の勝率は生成・評価用であり、レーティング手法への入力には使わない。
 
     writePlayers(players, (outputDir / config.playersFile).string());
     writeLatentParameters(parameters, (outputDir / config.latentParametersFile).string());
+    writeGroundTruth(
+      parameters, config.performanceStd, (outputDir / config.groundTruthFile).string()
+    );
 
     // 読み込み時点の設定全体を保存し、結果と使用した条件・シードを対応づける。
     project10::io::writeConfigSnapshot(config, outputDir);
