@@ -94,6 +94,9 @@ void validateExperimentSettings(const json& config) {
       throw std::runtime_error(std::string(field) + " must be a non-empty string.");
     }
   }
+  if (config.at("model") != "probit_1d") {
+    throw std::runtime_error("Only the probit_1d model is implemented.");
+  }
 }
 
 }  // namespaceおわり
