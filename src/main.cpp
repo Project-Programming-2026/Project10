@@ -95,6 +95,12 @@ int main() {
       if (fs::exists(status) && !fs::is_regular_file(status)) {
         throw std::runtime_error("Output path must be a regular file: " + path.string());
       }
+      // ハードリンクは通常ファイルに見えるため、共有する実体の切り詰めも防ぐ。
+      if (fs::is_regular_file(status) && fs::hard_link_count(path) > 1) {
+        throw std::runtime_error(
+          "Output path must not have multiple hard links: " + path.string()
+        );
+      }
     }
 
     // プレイヤーID・潜在能力・全ペアの真の勝率を、それぞれのCSVへ保存する。

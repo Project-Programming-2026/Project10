@@ -43,7 +43,7 @@ if(BUILD_TESTING)
   add_test(NAME simulation_unit COMMAND simulation_tests)
 
   foreach(case generation reproducibility invalid_input invalid_config duplicate_keys missing_config
-      overwrite output_paths symlink_outputs run_lock)
+      overwrite output_paths symlink_outputs hardlink_outputs run_lock)
     add_test(NAME cli_${case}
       COMMAND "${CMAKE_COMMAND}"
         "-DPROGRAM=$<TARGET_FILE:project10>"
