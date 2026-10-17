@@ -8,3 +8,9 @@ void writeLatentParameters(
   const std::vector<double>& parameters,
   const std::string& outputPath
 );
+
+void writeGroundTruth(
+  const std::vector<double>& parameters,
+  double performanceStd,
+  const std::string& outputPath
+);
