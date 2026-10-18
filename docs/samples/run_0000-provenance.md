@@ -20,12 +20,22 @@
 | ビルドツール | CMake `4.4.4`、Ninja `1.13.2.git.kitware.jobserver-pipe-1` |
 | ビルド条件 | C++17、Debug、`-g -std=c++17`、生成処理に `-Wall -Wextra -Wpedantic`。最適化・fast-mathの指定なし |
 | 入力 | 固定コミット内の `samples/run_0000/config.json` を、専用作業領域の `configs/run_0000/config.json` へバイト列のままコピー |
-| 生成条件 | 1,000人、正規分布の平均0・標準偏差1、能力シード `2026101601`。全設定は[共有設定](run_0000/config.json)を参照 |
+| 生成条件 | 1,000人、正規分布の平均0・標準偏差1、能力シード `2026101601`。全設定は[共有設定](../../samples/run_0000/config.json)を参照 |
 | 乱数 | `std::mt19937_64` と `std::normal_distribution<double>` |
 | 実行 | 専用作業領域をカレントディレクトリにし、`project10.exe` の標準入力へ `0` と改行を渡す |
-| 検証結果 | `config.json`・`players.csv`・`latent_parameters.csv` のすべてが共有サンプルとバイト単位で一致。[SHA256SUMS](run_0000/SHA256SUMS)の3ハッシュとも一致 |
+| 検証結果 | `config.json`・`players.csv`・`latent_parameters.csv` のすべてが共有サンプルとバイト単位で一致。[SHA256SUMS](../../samples/run_0000/SHA256SUMS)の3ハッシュとも一致 |
 
 CSVはWindowsのCRLF改行を含みます。別OS・別標準ライブラリでのバイト単位の一致は未確認です。ハッシュはファイルの同一性を確認するものであり、元データの生成時の環境を証明するものではありません。
+
+## bashでの共有ファイル照合
+
+リポジトリのルートから次のコマンドで保存済みの3ファイルを照合できます。2026-10-19にWSL Ubuntuのbashでも3ファイルすべての `OK` を確認しました。
+
+```bash
+(cd samples/run_0000 && sha256sum -c SHA256SUMS)
+```
+
+これは配布ファイルの同一性の確認です。Ubuntuの標準ライブラリでWindowsと同じ潜在能力列を再生成できるという意味ではありません。同一データの再生成を確認した条件は上表のWindows環境で、具体的な再生成手順は次のとおりです。
 
 ## 再現確認の手順
 

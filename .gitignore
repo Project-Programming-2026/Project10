@@ -12,22 +12,12 @@
 /Testing/
 /compile_commands.json
 
-# C++の生成物
-*.o
-*.obj
-*.out
+# C++の生成物はbuild/などのビルド領域へまとめる。
+# ルートに直接生成した既存の実行ファイルだけを個別に除外する。
 /project10
+/project10.exe
 /simulation_tests
-*.exe
-*.dll
-*.so
-*.so.*
-*.dylib
-*.a
-*.lib
-*.pdb
-*.ilk
-*.exp
+/simulation_tests.exe
 
 # IDE・OSのローカル生成物
 .vs/

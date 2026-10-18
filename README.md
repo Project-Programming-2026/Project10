@@ -4,6 +4,18 @@
 
 現在は、設定ファイルの読み込み、プレイヤーID・正規分布に従う潜在能力の生成、プロビットモデルによる真の勝率の計算とCSV出力まで実装しています。C++17・CMakeでビルドし、CTestで小規模な動作確認ができます。対戦組み合わせ・勝敗生成（`matches.csv`）、Elo・Glicko・Glicko-2・TrueSkill、推定レートからの予測勝率、MSE集計、グラフ生成は未実装です。以下の比較実験の説明には計画を含み、比較結果を示すものではありません。
 
+## 目次
+
+- [研究背景・目的](#background)
+- [扱うレーティングアルゴリズム](#扱うレーティングアルゴリズム)
+- [初期実験の方法（実装予定）](#experiment-plan)
+- [ディレクトリ構成](#ディレクトリ構成)
+- [環境構築・実行方法](#setup)
+- [開発体制・進め方](#development)
+- [参照資料](#参照資料)
+
+<a id="background"></a>
+
 ## 研究背景・目的
 
 研究テーマは、2026-09-18の会議で「競技における様々な条件下での適切なレーティング」と決まりました。競技の条件に応じて既存手法の特徴と限界を調べ、その結果から改善方法を検討します。[第2回会議](https://app.notion.com/p/3de751d0ef6d80e3be41c702bcd0bbff)
@@ -24,6 +36,8 @@
 | TrueSkill | 初期実験では1対1・引き分けなしに限定 | 未実装 |
 
 独自の提案手法v0は、既存手法の初期比較を踏まえて検討する予定です。仕様と担当は未確定で、既存手法より優れるという結果もまだありません。多次元能力、相性、実力の時間変化、マッチング方式の比較は拡張候補です。
+
+<a id="experiment-plan"></a>
 
 ## 初期実験の方法（一部実装済み）
 
@@ -76,9 +90,12 @@ $$
 │   └── PULL_REQUEST_TEMPLATE.md    PR本文のテンプレート
 ├── configs/
 │   └── run_0000/config.json        1試行分の設定例
+├── docs/
+│   ├── references.md             実装の参考資料と採用範囲
+│   └── samples/
+│       └── run_0000-provenance.md 共有サンプルの来歴と再現確認
 ├── samples/
 │   ├── README.md                  共通データの利用範囲と共有方法
-│   ├── PROVENANCE.md              既存サンプルの来歴と再現条件
 │   └── run_0000/                  生成済みのID・潜在能力・設定・ハッシュ
 ├── include/project10/
 │   ├── io/
@@ -112,6 +129,8 @@ $$
 ```
 
 設定・コード・結果はそれぞれ `configs/`・`src/` と `include/`・`runs/` に分けます。チームで共有する固定データは `samples/` に置きます。未実装機能のディレクトリやファイルは、実装時に作成します。
+
+<a id="setup"></a>
 
 ## 環境構築・実行方法
 
@@ -164,6 +183,8 @@ PowerShellからも起動できます。
 
 ### 設定と1試行の手動実行
 
+#### PowerShell
+
 実行時の作業ディレクトリはリポジトリのルートです。以下はPowerShellでrun ID `1` の設定を準備して実行する例です。すでに同じIDの設定や結果がある場合は、別の未使用IDを選んでください。
 
 1. リポジトリへ移動し、新しい設定ディレクトリを作って既存の設定をコピーします。`New-Item` は同名ディレクトリがあればエラーで停止します。その場合は既存設定を確認し、上書きせず別のIDを使ってください。
@@ -186,7 +207,23 @@ PowerShellからも起動できます。
 
 既存のrun ID `0` を使う場合は `configs/run_0000/config.json` が読み込まれます。`runs/run_0000/` がすでに存在すると上書き確認が表示されます。開発用データを再生成するときだけ `y` または `Y` を入力してください。正式な比較実験の結果を残す場合は、新しいrun IDと設定を用意します。
 
-Linuxでは `./build/dev/project10`、Visual StudioのDebugビルドでは `.\build\vs\Debug\project10.exe` を実行します。入力は0以上の `int` の範囲の整数で、`0.5` や `0 abc` は拒否します。IDは最低4桁にゼロ埋めされ、`0` は `configs/run_0000/config.json`、`12345` は `configs/run_12345/config.json` に対応します。コマンドライン引数による設定指定や複数試行の一括実行はありません。
+#### bash（Linux）
+
+リポジトリのルートで次を実行します。新規ディレクトリの作成に成功した場合だけ設定をコピーします。既存の同名ディレクトリがある場合は、別のrun IDを選んでください。
+
+```bash
+mkdir configs/run_0001 && cp configs/run_0000/config.json configs/run_0001/config.json
+```
+
+`configs/run_0001/config.json` をエディターで開き、`run_id` を `1`、`num_players` を `8` に変更します。前述のNinja手順でビルド後、次を実行し、`Enter run ID:` に `1` を入力します。
+
+```bash
+./build/dev/project10
+```
+
+出力先と上書き確認はPowerShellの場合と同じです。サンプルのbash向けチェックサム照合は[共有データの説明](samples/README.md)を参照してください。
+
+Visual StudioのDebugビルドでは `.\build\vs\Debug\project10.exe` を実行します。入力は0以上の `int` の範囲の整数で、`0.5` や `0 abc` は拒否します。IDは最低4桁にゼロ埋めされ、`0` は `configs/run_0000/config.json`、`12345` は `configs/run_12345/config.json` に対応します。コマンドライン引数による設定指定や複数試行の一括実行はありません。
 
 [configs/run_0000/config.json](configs/run_0000/config.json)は既存の設定例です。掲載されている3種類のシードは議事録由来の説明用の値であり、正式な実験シードとして確定したことを意味しません。小規模な確認には、この設定を新しい `configs/run_XXXX/config.json` へコピーして、`run_id` と `num_players`（例：8人）を変更します。他の条件とCSV名は維持してください。
 
@@ -259,7 +296,11 @@ CTestは単体確認と11種類のCLI結合確認を実行します。JSON設定
 
 追加する `.cpp` は `CMakeLists.txt` の適切なターゲットへ明示的に登録し、実行の統括は `main.cpp` に置きます。`.editorconfig` に従い、C++は半角スペース2文字でインデントします。既存コードの命名は目的と無関係に変更しません。
 
-ソース・ヘッダー・設定・共有サンプル・テスト・ビルド設定・文書・同梱依存はGit管理対象です。`runs/`、ビルド領域、実行ファイル、IDEのローカル設定、Pythonキャッシュは `.gitignore` で除外します。CSV全体を除外する規則は設けず、共有CSVは `samples/` で管理します。すでに追跡されているファイルには `.gitignore` は遡及しないため、作業前から存在する削除・移動差分は別途確認してください。
+ビルド生成物は `build/` などのビルド領域へまとめます。外部ライブラリのファイルを誤って除外しないよう、拡張子によるC++生成物の一律除外は行いません。ルートの既知の実行ファイルのみ個別に除外しています。
+
+ソース・ヘッダー・設定・共有サンプル・テスト・ビルド設定・文書・同梱依存はGit管理対象です。`runs/`、ビルド領域、ルートにある既知の実行ファイル、IDEのローカル設定、Pythonキャッシュは `.gitignore` で除外します。CSV全体を除外する規則は設けず、共有CSVは `samples/` で管理します。すでに追跡されているファイルには `.gitignore` は遡及しないため、作業前から存在する削除・移動差分は別途確認してください。
+
+<a id="development"></a>
 
 ## 開発体制・進め方
 
@@ -302,6 +343,9 @@ PR本文は[テンプレート](.github/PULL_REQUEST_TEMPLATE.md)に沿って、
 テンプレートがデフォルトブランチにマージされると、GitHubの新規PR作成画面で本文に自動表示されます。導入する最初のPRや、自動挿入されない作成方法では、ファイルの内容を本文へコピーして使ってください。詳細は[GitHubの公式説明](https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/creating-a-pull-request-template-for-your-repository)を参照してください。
 
 ## 参照資料
+
+- [実装の参考資料と採用範囲](docs/references.md)：CSV・JSON入出力の参考記事。
+- [共有サンプルの生成来歴と再現確認](docs/samples/run_0000-provenance.md)。
 
 - [チーム開発ハブ](https://app.notion.com/p/3d8751d0ef6d81c6944ad100e7eb5e69)：目的・運営原則・日程。閲覧には権限が必要な場合があります。
 - [議事録一覧](https://app.notion.com/p/a9064da39924434d8c17ee3f8e96691f)：研究方針と意思決定の履歴。
