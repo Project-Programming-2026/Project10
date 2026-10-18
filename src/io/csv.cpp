@@ -5,8 +5,7 @@
 #include <limits>
 #include <stdexcept>
 
-// 参考：Qiita「C++でCSVファイルを読み書きする方法」
-// https://qiita.com/shirosuke_93/items/d5d068bb15c8e8817c34
+// CSV入出力の参考資料はdocs/references.mdを参照。
 void writePlayers(const std::vector<int>& players, const std::string& outputPath) {
   std::ofstream file(outputPath);
   if (!file.is_open()) {
