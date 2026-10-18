@@ -111,11 +111,11 @@ $$
 └── AGENTS.md    開発規約、テスト、再現性、公平な比較の制約
 ```
 
-設定・コード・結果はそれぞれ `configs/`・`src/` と `include/`・`runs/` に分けます。チームで共有する固定データは `samples/` に置きます。将来用の空ディレクトリや空の実装ファイルは追加していません。
+設定・コード・結果はそれぞれ `configs/`・`src/` と `include/`・`runs/` に分けます。チームで共有する固定データは `samples/` に置きます。未実装機能のディレクトリやファイルは、実装時に作成します。
 
 ## 環境構築・実行方法
 
-議事録末尾の決定事項では、**実装言語はC++に統一し、グラフ生成のみPythonを認める**方針です。開発基盤は今回C++17・CMakeに統一しました。C++17の `std::filesystem` が利用できるコンパイラと標準ライブラリ、CMake 3.20以上、ビルドツールが必要です。Ninjaを使う場合はNinjaを、Visual Studioを使う場合はC++ビルドツールを用意してください。現在のビルドとテストにPythonは不要です。
+議事録末尾の決定事項では、**実装言語はC++に統一し、グラフ生成のみPythonを認める**方針です。開発基盤はC++17・CMakeを使用します。C++17の `std::filesystem` が利用できるコンパイラと標準ライブラリ、CMake 3.20以上、ビルドツールが必要です。Ninjaを使う場合はNinjaを、Visual Studioを使う場合はC++ビルドツールを用意してください。現在のビルドとテストにPythonは不要です。
 
 JSONは同梱のnlohmann/json 3.12.0のみを使用します。CMake構成時のネットワーク取得は行いません。依存の管理方針は[third_party/README.md](third_party/README.md)を参照してください。
 
@@ -146,7 +146,9 @@ cmake --build build/vs --config Debug
 ctest --test-dir build/vs -C Debug --output-on-failure
 ```
 
-検証環境はWindows・GCC 16.2.0（MSYS2 UCRT64）・CMake 4.4.4・Ninja 1.13.2です。上記Visual Studio手順とLinux上の実行は未検証です。`project10_core` に設定と生成処理、`project10` に `main.cpp` をまとめ、全 `.cpp` を明示的に登録しています。テスト不要の構成は `-DBUILD_TESTING=OFF` で作成できます。
+WindowsではGCC 16.2.0（MSYS2 UCRT64）・CMake 4.4.4・Ninja 1.13.2でビルドとCTestを確認しています。Linuxでは2026-10-19にWSL2 Ubuntu 24.04.5 LTS・GCC 13.3.0・CMake 3.28.3・Ninja 1.11.1で、DebugビルドとCTest全12件の成功を確認しました。Linuxのリンク保護テストもスキップせず成功しています。Visual Studio手順は未検証です。
+
+`project10_core` に設定と生成処理、`project10` に `main.cpp` をまとめ、全 `.cpp` を明示的に登録しています。テスト不要の構成は `-DBUILD_TESTING=OFF` で作成できます。
 
 ### Windowsでバッチから実行
 
@@ -183,15 +185,6 @@ PowerShellからも起動できます。
 4. `Enter run ID:` と表示されたら `1` を入力してEnterを押します。成功すると、`runs/run_0001/` に設定と3つのCSVが保存されます。
 
 既存のrun ID `0` を使う場合は `configs/run_0000/config.json` が読み込まれます。`runs/run_0000/` がすでに存在すると上書き確認が表示されます。開発用データを再生成するときだけ `y` または `Y` を入力してください。正式な比較実験の結果を残す場合は、新しいrun IDと設定を用意します。
-
-この作業環境ではCMakeがPATHに登録されていないため、コードを編集した後の再ビルドには、ローカルに配置したCMakeを次のように呼び出せます。
-
-```powershell
-.\build\tools\cmake\data\bin\cmake.exe --build build/dev
-.\build\dev\project10.exe
-```
-
-`build/tools/` は今回の検証環境にだけ存在するローカルツールで、Git管理対象には含めていません。新しく取得した環境では、前述の必要ツールを用意し、通常の `cmake --build build/dev` を使用してください。
 
 Linuxでは `./build/dev/project10`、Visual StudioのDebugビルドでは `.\build\vs\Debug\project10.exe` を実行します。入力は0以上の `int` の範囲の整数で、`0.5` や `0 abc` は拒否します。IDは最低4桁にゼロ埋めされ、`0` は `configs/run_0000/config.json`、`12345` は `configs/run_12345/config.json` に対応します。コマンドライン引数による設定指定や複数試行の一括実行はありません。
 
@@ -238,7 +231,7 @@ JSONの未使用項目もスナップショットに残します。潜在能力�
 
 各担当が同じ入力を取得できるよう、[共有データの説明](samples/README.md)に沿って `samples/run_0000/` に既存の生成済みデータのコピーを用意しています。プレイヤーIDと潜在能力のCSV、使用した設定、SHA-256をGit管理対象としています。1,000人分のCSVは合計約30KBです。`.gitattributes` で共有CSV・設定の改行変換を抑止し、OSが異なってもハッシュで同一性を確認できるようにしています。
 
-既存の共有サンプルには真の勝率CSVを追加していません。現在の生成器は `ground_truth.csv` も出力できますが、サンプルの更新は別途来歴・ハッシュとともに管理します。レーティング手法へ渡すのは、プレイヤーIDと観測した対戦履歴です。潜在能力と真の勝率は生成・評価・検証専用です。対戦生成が未実装なので、現在の共有サンプルだけではレート更新までは実行できません。対戦履歴を生成できるようになったら、全手法が同じファイル・試合順を使用するように共有します。
+共有サンプルに含まれるのは、プレイヤーID・潜在能力のCSV、使用した設定とチェックサムです。`ground_truth.csv` は現在の生成器の出力に含まれますが、共有サンプルには含まれません。サンプルの更新は別途来歴・ハッシュとともに管理します。レーティング手法へ渡すのは、プレイヤーIDと観測した対戦履歴です。潜在能力と真の勝率は生成・評価・検証専用です。対戦生成が未実装なので、現在の共有サンプルだけではレート更新までは実行できません。対戦履歴を生成できるようになったら、全手法が同じファイル・試合順を使用するように共有します。
 
 各自の実行結果は `runs/` へ保存し、共有入力のコピーを上書きしません。正式な比較では、使用する共通データを設定・ハッシュとともに固定します。Gitで扱える大きさならデータも管理し、大きい場合はチームの共有ストレージ等へ置いて、取得先・版・ハッシュをリポジトリに記録します。
 
@@ -260,7 +253,7 @@ CTestは単体確認と11種類のCLI結合確認を実行します。JSON設定
 | JSON・共有するCSV入出力 | 実装は `src/io/`、公開ヘッダーは `include/project10/io/` |
 | テスト・グラフ生成 | テストは `tests/`、将来のPythonによるグラフ生成は `scripts/` |
 
-この表の未実装領域のディレクトリは、実際のファイル追加時に作成します。各担当は小さな処理単位で実装し、共通利用する操作のみをヘッダーで公開します。既存の `players.cpp`、`latent_parameters.cpp` は生成処理を担当し、`generatePlayers(int)` はIDの配列、`generateLatentParameters(...)` は潜在能力の配列を返します。`probit.cpp` の `calculateWinProbability(...)` は2人の潜在能力とパフォーマンス標準偏差から真の勝率を返します。CSV出力は `io/csv.hpp` の `writePlayers`・`writeLatentParameters`・`writeGroundTruth` へ分離し、`main.cpp` で接続します。従来の `generatePlayers(int, outputPath)` は生成と保存に分かれたため、新たな呼び出し側はこの分担に従ってください。
+この表の未実装領域のディレクトリは、実際のファイル追加時に作成します。各担当は小さな処理単位で実装し、共通利用する操作のみをヘッダーで公開します。`players.cpp`、`latent_parameters.cpp` は生成処理を担当し、`generatePlayers(int)` はIDの配列、`generateLatentParameters(...)` は潜在能力の配列を返します。`probit.cpp` の `calculateWinProbability(...)` は2人の潜在能力とパフォーマンス標準偏差から真の勝率を返します。CSV出力は `io/csv.hpp` の `writePlayers`・`writeLatentParameters`・`writeGroundTruth` が担当し、`main.cpp` で接続します。
 
 レーティング本体へ正解情報が混入しない境界を維持し、各手法の出力は共通の評価処理へ渡します。提案手法は `ratings`、マッチングの変更は `simulation` に追加し、比較対象・対戦履歴への影響を記録します。
 
