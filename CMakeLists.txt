@@ -41,6 +41,9 @@ include(CTest)
 if(BUILD_TESTING)
   add_executable(simulation_tests tests/simulation_tests.cpp)
   target_link_libraries(simulation_tests PRIVATE project10_core)
+  if(MSVC)
+    target_compile_options(simulation_tests PRIVATE /utf-8)
+  endif()
   add_test(NAME simulation_unit COMMAND simulation_tests)
 
   foreach(case generation reproducibility invalid_input invalid_config duplicate_keys missing_config

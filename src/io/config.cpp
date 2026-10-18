@@ -112,10 +112,7 @@ std::string runDirectoryName(int runID) {
   return "run_" + number;
 }
 
-// 参考：Qiita「C++のjsonライブラリ決定版 nlohmann-json」
-// https://qiita.com/yohm/items/0f389ba5c5de4e2df9cf
-// json::parseによる構文解析、atによる項目取得、getによる型変換を参考にした。
-// 本実装では設定値の検証と、読み込んだ設定全体を保存する処理を追加している。
+// JSON読み込みの参考資料と採用範囲はdocs/references.mdを参照。
 SimulationConfig loadConfig(int runID) {
   // 1. 対象の設定を読み込み、元のJSON全文を保持したまま解析する。
   const auto configPath = std::filesystem::path("configs") /
