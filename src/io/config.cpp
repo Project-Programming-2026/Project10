@@ -94,8 +94,8 @@ void validateExperimentSettings(const json& config) {
       throw std::runtime_error(std::string(field) + " must be a non-empty string.");
     }
   }
-  if (readFiniteNumber(config, "performance_std") <= 0.0) {
-    throw std::runtime_error("performance_std must be positive.");
+  if (config.at("model") != "probit_1d") {
+    throw std::runtime_error("Only the probit_1d model is implemented.");
   }
 }
 
@@ -128,6 +128,10 @@ SimulationConfig loadConfig(int runID) {
   }
   settings.numPlayers = readInteger(config, "num_players", 1);
   validateExperimentSettings(config);
+  settings.performanceStd = readFiniteNumber(config, "performance_std");
+  if (settings.performanceStd <= 0.0) {
+    throw std::runtime_error("performance_std must be positive.");
+  }
 
   // 3. 潜在能力の生成に使う正規分布の平均と標準偏差を取得する。
   const auto& distribution = config.at("ability_distribution");
@@ -150,8 +154,10 @@ SimulationConfig loadConfig(int runID) {
   const auto& files = config.at("files");
   settings.playersFile = files.at("players").get<std::string>();
   settings.latentParametersFile = files.at("latent_parameters").get<std::string>();
+  settings.groundTruthFile = files.at("ground_truth").get<std::string>();
   if (settings.playersFile != "players.csv" ||
-      settings.latentParametersFile != "latent_parameters.csv") {
+      settings.latentParametersFile != "latent_parameters.csv" ||
+      settings.groundTruthFile != "ground_truth.csv") {
     throw std::runtime_error("Unexpected output filenames.");
   }
 
