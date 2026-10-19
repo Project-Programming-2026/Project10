@@ -33,6 +33,39 @@ void write(const fs::path& path, const std::string& text) {
   require(static_cast<bool>(file));
 }
 
+std::string read(const fs::path& path) {
+  std::ifstream file(path, std::ios::binary);
+  require(static_cast<bool>(file));
+  std::ostringstream contents;
+  contents << file.rdbuf();
+  require(!file.bad());
+  return contents.str();
+}
+
+void testPublication(const fs::path& dir) {
+  const auto temporary = dir / "temporary.csv";
+  const auto output = dir / "published.csv";
+  const std::string contents = "run_id,matches_per_player,mse\n0,10,0.0625\n";
+  write(temporary, contents);
+  project10::io::publishMseCsv(temporary.string(), output.string());
+  require(read(output) == contents && fs::equivalent(temporary, output));
+  fs::remove(temporary);
+  require(read(output) == contents && fs::hard_link_count(output) == 1);
+
+  // 存在確認後に別処理が保存した状況を再現。sleepや確率的な競合に依存しない。
+  const auto collision = dir / "collision.csv";
+  require(!fs::exists(collision));
+  write(collision, "protected existing result\n");
+  write(temporary, contents);
+  rejects([&] { project10::io::publishMseCsv(temporary.string(), collision.string()); });
+  require(read(collision) == "protected existing result\n" && read(temporary) == contents);
+  // リンクを作成できない場合も失敗し、部分的な出力を残さない。
+  const auto unavailable = dir / "missing-directory" / "result.csv";
+  rejects([&] { project10::io::publishMseCsv(temporary.string(), unavailable.string()); });
+  require(!fs::exists(unavailable) && read(temporary) == contents);
+  fs::remove(temporary);
+}
+
 void testCalculation() {
   ProbabilityMatrix truth(4, std::vector<double>(4, 0.5));
   MseEvaluator evaluator(7, 25, 10, truth);
@@ -162,6 +195,7 @@ int main(int argc, char** argv) {
     require(fs::create_directory(dir));
     testCalculation();
     testCsv(dir);
+    testPublication(dir);
     std::cout << "MSEの単体・CSV確認に成功しました\n";
   } catch (const std::exception& error) {
     std::cerr << error.what() << '\n';

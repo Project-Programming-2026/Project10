@@ -224,4 +224,19 @@ void writeMseCsv(
   if (!file) throw std::runtime_error("MSE出力ファイルへの書き込みに失敗しました: " + path);
 }
 
+void publishMseCsv(const std::string& temporaryPath, const std::string& outputPath) {
+  // 存在確認とrenameの組み合わせは、確認後に作られた既存ファイルを置換し得る。
+  // リンク作成なら宛先の存在確認と新しい名前の作成を一度の操作で行える。
+  // 非対応環境でも上書きし得る方法へ切り替えず、エラーとして終了する。
+  std::error_code error;
+  std::filesystem::create_hard_link(temporaryPath, outputPath, error);
+  if (error == std::errc::file_exists) {
+    throw std::runtime_error("MSE出力先がすでに存在します: " + outputPath);
+  }
+  if (error) {
+    throw std::runtime_error("MSE出力を上書きせずに配置できません（エラーコード: " +
+                             std::to_string(error.value()) + "）: " + outputPath);
+  }
+}
+
 }  // namespace project10::io

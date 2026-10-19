@@ -48,14 +48,18 @@ int main() {
     const auto temporary = lockPath / config.mseFile;
     try {
       project10::io::writeMseCsv(temporary.string(), runID, results);
-      if (fs::exists(fs::symlink_status(output))) {
-        throw std::runtime_error("MSE出力先がすでに存在します: " + output.string());
-      }
-      fs::rename(temporary, output);
+      project10::io::publishMseCsv(temporary.string(), output.string());
     } catch (...) {
       std::error_code ignored;
       fs::remove(temporary, ignored);
       throw;
+    }
+    // 公開後の一時ファイル削除失敗は、保存済み結果の失敗と区別する。
+    std::error_code cleanupError;
+    fs::remove(temporary, cleanupError);
+    if (cleanupError) {
+      std::cerr << "警告: MSEの出力は完了しましたが、一時ファイルを削除できません: "
+                << temporary.string() << '\n';
     }
     std::cout << "MSE output: " << output.string() << '\n';
   } catch (const fs::filesystem_error& error) {
