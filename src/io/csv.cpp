@@ -22,6 +22,22 @@ void writePlayers(const std::vector<int>& players, const std::string& outputPath
   }
 }
 
+void writeMatches(const std::vector<Match>& matches, const std::string& outputPath) {
+  std::ofstream file(outputPath);
+  if (!file.is_open()) {
+    throw std::runtime_error("Failed to open: " + outputPath);
+  }
+  file << "match_id,period_id,player_a,player_b,result_a\n";
+  for (const auto& match : matches) {
+    file << match.matchID << ',' << match.periodID << ',' << match.playerA << ','
+      << match.playerB << ',' << match.resultA << '\n';
+  }
+  file.close();
+  if (!file) {
+    throw std::runtime_error("Failed to write: " + outputPath);
+  }
+}
+
 void writeLatentParameters(
   const std::vector<double>& parameters,
   const std::string& outputPath

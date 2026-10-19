@@ -82,12 +82,9 @@ std::string readConfigText(const std::filesystem::path& path) {
   return contents.str();
 }
 
-// まだ実行しない対戦・評価工程の設定も、基本的な型と範囲は確認する。
+// 未実装の評価工程の設定も、基本的な型と範囲は確認する。
 void validateExperimentSettings(const json& config) {
-  for (const auto* field : {"matches_per_player", "evaluation_interval_matches_per_player",
-                            "rating_period_matches_per_player"}) {
-    readInteger(config, field, 1);
-  }
+  readInteger(config, "evaluation_interval_matches_per_player", 1);
   for (const auto* field : {"schema_version", "model", "matchmaking"}) {
     const auto& value = config.at(field);
     if (!value.is_string() || value.get_ref<const std::string&>().empty()) {
@@ -96,6 +93,9 @@ void validateExperimentSettings(const json& config) {
   }
   if (config.at("model") != "probit_1d") {
     throw std::runtime_error("Only the probit_1d model is implemented.");
+  }
+  if (config.at("matchmaking") != "uniform_random") {
+    throw std::runtime_error("Only uniform_random round matching is implemented.");
   }
 }
 
@@ -126,7 +126,14 @@ SimulationConfig loadConfig(int runID) {
   if (settings.runID != runID) {
     throw std::runtime_error("Run ID mismatch.");
   }
-  settings.numPlayers = readInteger(config, "num_players", 1);
+  settings.numPlayers = readInteger(config, "num_players", 2);
+  if (settings.numPlayers % 2 != 0) {
+    throw std::runtime_error("num_players must be even for round matching.");
+  }
+  settings.matchesPerPlayer = readInteger(config, "matches_per_player", 1);
+  settings.ratingPeriodMatchesPerPlayer = readInteger(
+    config, "rating_period_matches_per_player", 1
+  );
   validateExperimentSettings(config);
   settings.performanceStd = readFiniteNumber(config, "performance_std");
   if (settings.performanceStd <= 0.0) {
@@ -144,20 +151,21 @@ SimulationConfig loadConfig(int runID) {
     throw std::runtime_error("ability_distribution.std must be positive.");
   }
 
-  // 4. 3種類のシードを検証する。現在の生成処理で使うのはabilityのみ。
+  // 4. 能力・対戦組み合わせ・勝敗それぞれ独立した生成器で使うシード。
   const auto& seeds = config.at("seeds");
   settings.abilitySeed = readNonNegativeInteger(seeds, "ability");
-  readNonNegativeInteger(seeds, "matching");
-  readNonNegativeInteger(seeds, "result");
+  settings.matchingSeed = readNonNegativeInteger(seeds, "matching");
+  settings.resultSeed = readNonNegativeInteger(seeds, "result");
 
   // 5. 出力先のファイル名を取得し、現在のCSV仕様と一致することを確認する。
   const auto& files = config.at("files");
   settings.playersFile = files.at("players").get<std::string>();
   settings.latentParametersFile = files.at("latent_parameters").get<std::string>();
   settings.groundTruthFile = files.at("ground_truth").get<std::string>();
+  settings.matchesFile = files.at("matches").get<std::string>();
   if (settings.playersFile != "players.csv" ||
       settings.latentParametersFile != "latent_parameters.csv" ||
-      settings.groundTruthFile != "ground_truth.csv") {
+      settings.groundTruthFile != "ground_truth.csv" || settings.matchesFile != "matches.csv") {
     throw std::runtime_error("Unexpected output filenames.");
   }
 

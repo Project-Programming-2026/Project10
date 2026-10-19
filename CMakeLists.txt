@@ -19,6 +19,7 @@ add_library(project10_core
   src/simulation/players.cpp
   src/simulation/latent_parameters.cpp
   src/simulation/probit.cpp
+  src/simulation/matches.cpp
 )
 target_include_directories(project10_core PUBLIC
   "${CMAKE_CURRENT_SOURCE_DIR}/include"
@@ -46,7 +47,7 @@ if(BUILD_TESTING)
   add_test(NAME simulation_unit COMMAND simulation_tests)
 
   foreach(case generation reproducibility invalid_input invalid_config duplicate_keys missing_config
-      overwrite output_paths symlink_outputs hardlink_outputs run_lock)
+      overwrite output_paths symlink_outputs hardlink_outputs run_lock initial_scale seed_roles)
     add_test(NAME cli_${case}
       COMMAND "${CMAKE_COMMAND}"
         "-DPROGRAM=$<TARGET_FILE:project10>"
