@@ -18,6 +18,8 @@ add_library(project10_core
   src/io/csv.cpp
   src/simulation/players.cpp
   src/simulation/latent_parameters.cpp
+  src/simulation/probit.cpp
+  src/simulation/matches.cpp
 )
 target_include_directories(project10_core PUBLIC
   "${CMAKE_CURRENT_SOURCE_DIR}/include"
@@ -44,7 +46,8 @@ if(BUILD_TESTING)
   endif()
   add_test(NAME simulation_unit COMMAND simulation_tests)
 
-  foreach(case generation reproducibility invalid_input invalid_config duplicate_keys missing_config overwrite)
+  foreach(case generation reproducibility invalid_input invalid_config duplicate_keys missing_config
+      overwrite output_paths symlink_outputs hardlink_outputs run_lock initial_scale seed_roles)
     add_test(NAME cli_${case}
       COMMAND "${CMAKE_COMMAND}"
         "-DPROGRAM=$<TARGET_FILE:project10>"
@@ -54,4 +57,8 @@ if(BUILD_TESTING)
         -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/generation.cmake"
     )
   endforeach()
+  # Windowsではリンク作成権限がない環境がある。未検証を成功と混同しない。
+  set_tests_properties(cli_symlink_outputs PROPERTIES
+    SKIP_REGULAR_EXPRESSION "Symbolic link creation unavailable:"
+  )
 endif()

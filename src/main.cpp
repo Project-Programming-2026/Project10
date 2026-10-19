@@ -1,15 +1,45 @@
 #include "project10/io/config.hpp"
 #include "project10/io/csv.hpp"
 #include "project10/simulation/latent_parameters.hpp"
+#include "project10/simulation/matches.hpp"
 #include "project10/simulation/players.hpp"
 
 #include <filesystem>
+#include <initializer_list>
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <system_error>
 
 namespace fs = std::filesystem;
+
+namespace {
+
+// ディレクトリの排他的作成で、同じrunへ書く全プロセスを直列化する。
+// 出力先とは別に置き、上書き確認中から設定保存まで保持する。
+class RunLock {
+public:
+  explicit RunLock(const fs::path& path) : path_(path) {
+    if (!fs::create_directory(path_)) {
+      throw std::runtime_error("Run is already in use: " + path_.string());
+    }
+  }
+  ~RunLock() {
+    std::error_code error;
+    fs::remove(path_, error);
+    if (error) {
+      std::cerr << "Failed to release run lock: " << path_.string() << '\n';
+    }
+  }
+  RunLock(const RunLock&) = delete;
+  RunLock& operator=(const RunLock&) = delete;
+
+private:
+  fs::path path_;
+};
+
+}  // namespace
 
 // 1回の実行で、指定したrun IDの設定から1試行分のデータを生成・保存する。
 int main() {
@@ -36,22 +66,58 @@ int main() {
     const auto parameters = generateLatentParameters(
       config.numPlayers, config.mean, config.stddev, config.abilitySeed
     );
+    const auto matches = generateMatches(
+      parameters, config.matchesPerPlayer, config.ratingPeriodMatchesPerPlayer,
+      config.performanceStd, config.matchingSeed, config.resultSeed
+    );
 
     // run IDを最低4桁にゼロ埋めし、この試行の結果をruns/run_XXXX/へまとめる。
     const auto outputDir = fs::path("runs") / project10::io::runDirectoryName(runID);
     fs::create_directories("runs");
+    const RunLock lock(fs::path("runs") / ("." + outputDir.filename().string() + ".lock"));
 
-    // 作成できた実行だけが書き込みへ進む。既存の空ディレクトリも上書きしない。
-    // 事前の存在確認と作成を分けず、同時実行による競合も防ぐ。
+    // 新規作成できなかった場合は、空ディレクトリでも明示的な確認を求める。
     if (!fs::create_directory(outputDir)) {
-      throw std::runtime_error("Output directory already exists: " + outputDir.string());
+      if (fs::is_symlink(outputDir) || !fs::is_directory(outputDir)) {
+        throw std::runtime_error("Output path must be a regular directory.");
+      }
+      std::cout << "Output directory already exists: " << outputDir.string() << '\n';
+      std::cout << "Overwrite config.json and the 4 generated CSV files? [y/N]: ";
+      std::string confirmation;
+      if (!std::getline(std::cin, confirmation) ||
+          (confirmation != "y" && confirmation != "Y")) {
+        std::cerr << "Overwrite cancelled." << std::endl;
+        return 1;
+      }
     }
 
-    // IDのみのplayers.csvと、ID・潜在能力を持つlatent_parameters.csvを別々に保存する。
-    // 潜在能力は生成・評価用の正解情報であり、レーティング手法への入力には使わない。
+    // 全出力先を先に検査し、リンクやディレクトリへの書き込みで
+    // run外のデータや、検査済みでない他の出力を変更することを防ぐ。
+    for (const auto& name : {std::string("config.json"), config.playersFile,
+                            config.latentParametersFile, config.groundTruthFile,
+                            config.matchesFile}) {
+      const auto path = outputDir / name;
+      const auto status = fs::symlink_status(path);
+      if (fs::exists(status) && !fs::is_regular_file(status)) {
+        throw std::runtime_error("Output path must be a regular file: " + path.string());
+      }
+      // ハードリンクは通常ファイルに見えるため、共有する実体の切り詰めも防ぐ。
+      if (fs::is_regular_file(status) && fs::hard_link_count(path) > 1) {
+        throw std::runtime_error(
+          "Output path must not have multiple hard links: " + path.string()
+        );
+      }
+    }
+
+    // プレイヤーID・潜在能力・全ペアの真の勝率・対戦履歴を別々のCSVへ保存する。
+    // 潜在能力と真の勝率は生成・評価用であり、レーティング手法への入力には使わない。
 
     writePlayers(players, (outputDir / config.playersFile).string());
     writeLatentParameters(parameters, (outputDir / config.latentParametersFile).string());
+    writeGroundTruth(
+      parameters, config.performanceStd, (outputDir / config.groundTruthFile).string()
+    );
+    writeMatches(matches, (outputDir / config.matchesFile).string());
 
     // 読み込み時点の設定全体を保存し、結果と使用した条件・シードを対応づける。
     project10::io::writeConfigSnapshot(config, outputDir);
