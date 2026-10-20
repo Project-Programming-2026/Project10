@@ -225,8 +225,7 @@ void writeMseCsv(
 }
 
 void publishMseCsv(const std::string& temporaryPath, const std::string& outputPath) {
-  // 存在確認とrenameの組み合わせは、確認後に作られた既存ファイルを置換し得る。
-  // リンク作成なら宛先の存在確認と新しい名前の作成を一度の操作で行える。
+  // ハードリンクで存在確認と配置を一体化し、直前に作られた既存ファイルの置換を防ぐ。
   // 非対応環境でも上書きし得る方法へ切り替えず、エラーとして終了する。
   std::error_code error;
   std::filesystem::create_hard_link(temporaryPath, outputPath, error);
