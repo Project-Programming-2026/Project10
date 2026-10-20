@@ -7,7 +7,6 @@
 #include <iostream>
 using namespace std;
 
-static int run_id = 0;
 static string output_pass = "glicko2.csv"; //一旦カレントディレクトリとする
 static string input_pass_players = "players.csv";
 static string input_pass_matches = "matches.csv";
@@ -165,7 +164,7 @@ double predict(int i, int j){
     return 1 / (1 + pow(10,-g1(sqrt(pow(rdi,2)+pow(rdj,2)))*(ri-rj)/400));
 }
 
-void output(int period){
+void output(int run_id, int period){
     ofstream out(output_pass,ios::app);
     sort(exist_player.begin(),exist_player.end());
     for(int i=0; i<exist_player.size(); i++) for(int j=i+1; j<exist_player.size();j++){
@@ -176,22 +175,12 @@ void output(int period){
     out.close();
 }
 
-int main(int argc, char* argv[]){
-    //run_idの決定(デフォルトは0)
-    if(argc>3){
-        cout << "invalid argument." << endl;
-        return 0;
-    }else if(argc==2){
-        run_id = stoi(argv[1]);
-        cout << "run_id = " << stoi(argv[1]) << endl;
-    }else{
-        cout << "run_id = 0" << endl;
-    }
+void generate_glicko2_prediction(int run_id){
     //glicko2.csvの作成と1行目の記述
     ofstream out(output_pass);
     if(!out){
-        cout << "could not make glicko2.csv." << endl;
-        return 0;
+        cerr << "could not make glicko2.csv." << endl;
+        return;
     }
     out << "run_id,matches_per_player,player_a,player_b,predicted_p_a_wins" << endl;
     out.close();
@@ -199,8 +188,8 @@ int main(int argc, char* argv[]){
     //プレイヤー登録
     ifstream in_players(input_pass_players);
     if(!in_players){
-        cout << "could not open players.csv." << endl;
-        return 0;
+        cerr << "could not open players.csv." << endl;
+        return;
     }
     getline(in_players,line); //一回読み飛ばす
     while(getline(in_players,line)){
@@ -213,8 +202,8 @@ int main(int argc, char* argv[]){
     int current_period = 0;
     ifstream in_matches(input_pass_matches);
     if(!in_matches){
-        cout << "could not open matches.csv." << endl;
-        return 0;
+        cerr << "could not open matches.csv." << endl;
+        return;
     }
     getline(in_matches,line); //一回読み飛ばす
     while(getline(in_matches,line)){
@@ -224,13 +213,13 @@ int main(int argc, char* argv[]){
         while(getline(ss,value,',')) row.push_back(value);
         //コメント行の処理をする場合ここに追加
         if(row.size() != 5){
-            cout << "invalid data in matches.csv." << endl;
-            return 0;
+            cerr << "invalid data in matches.csv." << endl;
+            return;
         }
         //period_idが変化したら、更新、集計
         if(stoi(row.at(1)) != current_period){
             update_all();
-            output(current_period);
+            output(run_id,current_period);
             current_period = stoi(row.at(1));
         }
         //対戦結果の登録
@@ -240,7 +229,13 @@ int main(int argc, char* argv[]){
     in_matches.close();
     //最後に一回更新、集計
     update_all();
-    output(current_period);
+    output(run_id,current_period);
 
     for(auto [_, player]:players) delete(player);
 }
+
+/*
+int main(){
+    generate_glicko2_prediction(-1);
+}
+*/
