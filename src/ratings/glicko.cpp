@@ -81,12 +81,14 @@ std::vector<GlickoState> updateGlickoPeriod(
       !std::all_of(states.begin(), states.end(), isValidState)) {
     throw std::invalid_argument("Invalid Glicko period parameters");
   }
+  // 空の期間（全員がStep 1だけ）も受け付けるため、front()は試合があるときだけ参照する。
+  const int periodID = periodMatches.empty() ? 0 : periodMatches.front().periodID;
   for (const Match& match : periodMatches) {
     if (!isValidPlayer(match.playerA, states.size()) ||
         !isValidPlayer(match.playerB, states.size()) ||
         match.playerA == match.playerB ||
         (match.resultA != 0 && match.resultA != 1) ||
-        match.periodID != periodMatches.front().periodID) {
+        match.periodID != periodID) {
       throw std::invalid_argument("Invalid match in Glicko rating period");
     }
   }
