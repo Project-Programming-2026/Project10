@@ -20,6 +20,7 @@ add_library(project10_core
   src/simulation/latent_parameters.cpp
   src/simulation/probit.cpp
   src/simulation/matches.cpp
+  src/ratings/glicko2.cpp
 )
 target_include_directories(project10_core PUBLIC
   "${CMAKE_CURRENT_SOURCE_DIR}/include"

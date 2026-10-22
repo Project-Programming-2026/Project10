@@ -1,3 +1,5 @@
+#include "project10/ratings/glicko2.hpp"
+
 #include <cmath>
 #include <vector>
 #include <map>
@@ -5,11 +7,13 @@
 #include <fstream>
 #include <sstream>
 #include <iostream>
+#include <filesystem>
 using namespace std;
+namespace fs = filesystem;
 
-static string output_pass = "glicko2.csv"; //一旦カレントディレクトリとする
-static string input_pass_players = "players.csv";
-static string input_pass_matches = "matches.csv";
+static fs::path output_file = "glicko2.csv"; //一旦カレントディレクトリとする
+static fs::path input_file_players = "players.csv";
+static fs::path input_file_matches = "matches.csv";
 static const double tau = 0.5; //ボラティリティの変動しやすさ
 static const double epsilon = 0.000001; //小さい定数
 static const double pi = 3.141592653589793; //円周率
@@ -164,8 +168,8 @@ double predict(int i, int j){
     return 1 / (1 + pow(10,-g1(sqrt(pow(rdi,2)+pow(rdj,2)))*(ri-rj)/400));
 }
 
-void output(int run_id, int period){
-    ofstream out(output_pass,ios::app);
+void output(int run_id, int period, fs::path file_path){
+    ofstream out(file_path / output_file,ios::app);
     sort(exist_player.begin(),exist_player.end());
     for(int i=0; i<exist_player.size(); i++) for(int j=i+1; j<exist_player.size();j++){
         int a = exist_player.at(i);
@@ -175,18 +179,10 @@ void output(int run_id, int period){
     out.close();
 }
 
-void generate_glicko2_prediction(int run_id){
-    //glicko2.csvの作成と1行目の記述
-    ofstream out(output_pass);
-    if(!out){
-        cerr << "could not make glicko2.csv." << endl;
-        return;
-    }
-    out << "run_id,matches_per_player,player_a,player_b,predicted_p_a_wins" << endl;
-    out.close();
+void generate_glicko2_prediction(int run_id, fs::path file_path){
     string line;
     //プレイヤー登録
-    ifstream in_players(input_pass_players);
+    ifstream in_players(file_path / input_file_players);
     if(!in_players){
         cerr << "could not open players.csv." << endl;
         return;
@@ -200,11 +196,19 @@ void generate_glicko2_prediction(int run_id){
     in_players.close();
     //対戦
     int current_period = 0;
-    ifstream in_matches(input_pass_matches);
+    ifstream in_matches(file_path / input_file_matches);
     if(!in_matches){
         cerr << "could not open matches.csv." << endl;
         return;
     }
+    //glicko2.csvの作成と1行目の記述
+    ofstream out(file_path / output_file);
+    if(!out){
+        cerr << "could not make glicko2.csv." << endl;
+        return;
+    }
+    out << "run_id,matches_per_player,player_a,player_b,predicted_p_a_wins" << endl;
+    out.close();
     getline(in_matches,line); //一回読み飛ばす
     while(getline(in_matches,line)){
         stringstream ss(line);
@@ -219,7 +223,7 @@ void generate_glicko2_prediction(int run_id){
         //period_idが変化したら、更新、集計
         if(stoi(row.at(1)) != current_period){
             update_all();
-            output(run_id,current_period);
+            output(run_id,current_period,file_path);
             current_period = stoi(row.at(1));
         }
         //対戦結果の登録
@@ -229,13 +233,12 @@ void generate_glicko2_prediction(int run_id){
     in_matches.close();
     //最後に一回更新、集計
     update_all();
-    output(run_id,current_period);
+    output(run_id,current_period,file_path);
 
     for(auto [_, player]:players) delete(player);
 }
 
-/*
+
 int main(){
     generate_glicko2_prediction(-1);
 }
-*/
