@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <stdexcept>
 
 namespace {
@@ -83,6 +84,8 @@ std::vector<GlickoState> updateGlickoPeriod(
   }
   // 空の期間（全員がStep 1だけ）も受け付けるため、front()は試合があるときだけ参照する。
   const int periodID = periodMatches.empty() ? 0 : periodMatches.front().periodID;
+  std::vector<std::uint64_t> matchIDs;
+  matchIDs.reserve(periodMatches.size());
   for (const Match& match : periodMatches) {
     if (!isValidPlayer(match.playerA, states.size()) ||
         !isValidPlayer(match.playerB, states.size()) ||
@@ -91,6 +94,12 @@ std::vector<GlickoState> updateGlickoPeriod(
         match.periodID != periodID) {
       throw std::invalid_argument("Invalid match in Glicko rating period");
     }
+    matchIDs.push_back(match.matchID);
+  }
+  // 同じ試合を二重に集計しないよう、matchIDの重複を拒否する（同じ相手との再戦は別ID）。
+  std::sort(matchIDs.begin(), matchIDs.end());
+  if (std::adjacent_find(matchIDs.begin(), matchIDs.end()) != matchIDs.end()) {
+    throw std::invalid_argument("Duplicate matchID in Glicko rating period");
   }
 
   // Step 1(b)：期間の間にRDを増やす。ただし未評価のRDを上限とする。
