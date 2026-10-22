@@ -1,0 +1,19 @@
+#pragma once
+
+#include <filesystem>
+#include <string>
+
+namespace project10::evaluation {
+
+struct EvaluationResult {
+  std::filesystem::path output;
+  // 公開成功後の一時ファイル削除失敗だけを通知する。通常は空。
+  std::filesystem::path cleanupWarning;
+};
+
+// カレントディレクトリのruns/内の保存済み設定・予測を使用する。
+// 自身でrunロックを取得し、入力検証からMSE公開・一時ファイル削除まで保持する。
+// 既存MSEは上書きしない。失敗は例外、表示は呼び出し側の責務。
+EvaluationResult evaluateRun(int runID, const std::string& algorithm);
+
+}  // namespace project10::evaluation

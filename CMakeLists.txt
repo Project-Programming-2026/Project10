@@ -20,7 +20,9 @@ add_library(project10_core
   src/simulation/latent_parameters.cpp
   src/simulation/probit.cpp
   src/simulation/matches.cpp
+  src/simulation/run.cpp
   src/evaluation/MSE.cpp
+  src/evaluation/run.cpp
 )
 target_include_directories(project10_core PUBLIC
   "${CMAKE_CURRENT_SOURCE_DIR}/include"
@@ -43,6 +45,15 @@ endif()
 
 include(CTest)
 if(BUILD_TESTING)
+  add_executable(run_services_tests tests/run_services_tests.cpp)
+  target_link_libraries(run_services_tests PRIVATE project10_core nlohmann_json::nlohmann_json)
+  if(MSVC)
+    target_compile_options(run_services_tests PRIVATE /utf-8)
+  endif()
+  add_test(NAME run_services COMMAND run_services_tests
+    "${CMAKE_CURRENT_BINARY_DIR}/test-work"
+    "${CMAKE_CURRENT_SOURCE_DIR}/configs/run_0000/config.json"
+  )
   add_executable(evaluation_tests tests/evaluation_tests.cpp)
   target_link_libraries(evaluation_tests PRIVATE project10_core)
   if(MSVC)
