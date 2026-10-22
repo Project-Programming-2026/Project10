@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <map>
 #include <string>
 
 namespace project10::io {
@@ -36,6 +37,16 @@ struct EvaluationConfig {
 
 // configs/ではなく、生成結果に保存した設定を読む。
 EvaluationConfig loadEvaluationConfig(int runID, const std::string& algorithm);
+
+struct PlotConfig {
+  int runID;
+  int matchesPerPlayer;
+  int interval;
+  std::map<std::string, std::string> mseFiles;
+};
+
+// 描画には正解情報や予測CSVを必要としない。
+PlotConfig loadPlotConfig(int runID);
 
 std::string runDirectoryName(int runID);
 SimulationConfig loadConfig(int runID);
