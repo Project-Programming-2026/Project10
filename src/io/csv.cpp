@@ -1,4 +1,5 @@
 #include "project10/io/csv.hpp"
+#include "project10/io/run_lock.hpp"
 #include "project10/simulation/probit.hpp"
 
 #include <fstream>
@@ -276,8 +277,11 @@ void writeEloPredictions(
   if (runID < 0 || evaluationIntervalMatchesPerPlayer <= 0 || players.empty()) {
     throw std::invalid_argument("Invalid arguments for writeEloPredictions");
   }
+  if (players.size() % 2 != 0) {
+    throw std::invalid_argument("players count must be even");
+  }
 
-  // 既存ファイルの保護: 出力先が既に存在する場合はエラーにする
+  // 既存ファイルの保護: 出力先が既に存在する場合は早期にエラーにする
   if (std::filesystem::exists(std::filesystem::symlink_status(outputPath))) {
     throw std::runtime_error("出力先ファイルがすでに存在します: " + outputPath);
   }
@@ -288,15 +292,15 @@ void writeEloPredictions(
   // Elo計算機を用意
   ratings::EloRating elo(players, params);
 
-  // 途中で失敗した際に不完全なファイルが残らないよう、一時ファイルへ書き込む
-  const std::string tmpPath = outputPath + ".tmp";
-  // 以前の一時ファイルが残っていれば安全に削除
-  std::filesystem::remove(tmpPath);
+  // 排他制御用のロックディレクトリを作成し、その内部の一時ファイルへ書き込む
+  const std::filesystem::path lockDir(outputPath + ".lock");
+  const RunLock lock(lockDir);
+  const std::filesystem::path tmpPath = lockDir / "elo.csv.tmp";
 
   try {
     std::ofstream file(tmpPath);
     if (!file.is_open()) {
-      throw std::runtime_error("一時ファイルを開けません: " + tmpPath);
+      throw std::runtime_error("一時ファイルを開けません: " + tmpPath.string());
     }
 
     file.imbue(std::locale::classic());
@@ -332,19 +336,40 @@ void writeEloPredictions(
       }
     }
 
-    file.close();
-    if (!file) {
-      throw std::runtime_error("ファイルの書き込みに失敗しました: " + tmpPath);
+    // 公開前に、端数ラウンドで終わっていないことと全員の最終試合数を検証する
+    if (matches.empty() || matches.size() % static_cast<std::size_t>(matchesPerRound) != 0) {
+      throw std::runtime_error("対戦履歴がラウンド途中で終わっています");
+    }
+    const int finalMatches = static_cast<int>(matches.size() / static_cast<std::size_t>(matchesPerRound));
+    for (int p = 0; p < totalPlayers; ++p) {
+      if (elo.matchCount(p) != finalMatches) {
+        throw std::runtime_error("最終的なプレイヤーの消化試合数が不揃いです（欠損・重複履歴の検出）");
+      }
     }
 
-    // 書き込みが正常に完了したら、本来のファイル名へ安全に移動する
-    std::filesystem::rename(tmpPath, outputPath);
+    file.close();
+    if (!file) {
+      throw std::runtime_error("ファイルの書き込みに失敗しました: " + tmpPath.string());
+    }
+
+    // ハードリンクで存在確認と公開を一体化（原子的に公開）し、既存ファイルの置換を防ぐ
+    std::error_code error;
+    std::filesystem::create_hard_link(tmpPath, outputPath, error);
+    if (error == std::errc::file_exists) {
+      throw std::runtime_error("出力先ファイルがすでに存在します: " + outputPath);
+    }
+    if (error) {
+      throw std::runtime_error("出力ファイルを上書きせずに配置できません（エラーコード: " +
+                               std::to_string(error.value()) + "）: " + outputPath);
+    }
   } catch (...) {
-    // 例外が発生した場合は不完全な一時ファイルを削除して再送出する
-    std::filesystem::remove(tmpPath);
+    std::error_code ignored;
+    std::filesystem::remove(tmpPath, ignored);
     throw;
   }
+
+  std::error_code cleanupError;
+  std::filesystem::remove(tmpPath, cleanupError);
 }
 
 }  // namespace project10::io
-

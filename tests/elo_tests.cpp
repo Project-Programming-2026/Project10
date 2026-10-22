@@ -153,16 +153,18 @@ void testEloRatingUpdate() {
 void testPredictionsOutputProtection() {
   const std::string testFile = "test_elo_protection.csv";
   std::filesystem::remove(testFile);
-  std::filesystem::remove(testFile + ".tmp");
+  std::filesystem::remove_all(testFile + ".lock");
 
   const std::vector<int> players = {0, 1};
   const std::vector<Match> matches = {
     {0, 0, 0, 1, 1}
   };
 
-  // 正常出力
+  // 正常出力（ハードリンク公開後に一時ファイルとロックが消えていることも確認）
   project10::io::writeEloPredictions(0, players, matches, 1, testFile);
   require(std::filesystem::exists(testFile), "Output file must exist after writing");
+  require(!std::filesystem::exists(testFile + ".lock"), "Lock directory must be cleaned up");
+  require(std::filesystem::hard_link_count(testFile) == 1, "Published file must have 1 hard link");
 
   // 既存ファイルの保護確認（2回目の書き込みは拒否される）
   bool caughtExisting = false;
@@ -172,8 +174,39 @@ void testPredictionsOutputProtection() {
     caughtExisting = true;
   }
   require(caughtExisting, "Must throw runtime_error when output file already exists");
-
   std::filesystem::remove(testFile);
+
+  // 端数で終わる対戦履歴（4人・間隔1で、第1ラウンド2試合＋第2ラウンド1試合の計3試合）を拒否し公開しない
+  const std::vector<int> fourPlayers = {0, 1, 2, 3};
+  const std::vector<Match> truncatedMatches = {
+    {0, 0, 0, 1, 1},
+    {1, 0, 2, 3, 0},
+    {2, 1, 0, 2, 1}
+  };
+  bool caughtTruncated = false;
+  try {
+    project10::io::writeEloPredictions(0, fourPlayers, truncatedMatches, 1, testFile);
+  } catch (const std::exception&) {
+    caughtTruncated = true;
+  }
+  require(caughtTruncated, "Must reject match history ending mid-round");
+  require(!std::filesystem::exists(testFile), "Must not publish CSV when match history is invalid");
+
+  // 最終ラウンド（チェックポイント外）で各人の試合数が不揃いな履歴も公開前に拒否する
+  const std::vector<Match> unevenFinalMatches = {
+    {0, 0, 0, 1, 1},
+    {1, 0, 2, 3, 0},
+    {2, 1, 0, 1, 1},
+    {3, 1, 0, 2, 0}
+  };
+  bool caughtUneven = false;
+  try {
+    project10::io::writeEloPredictions(0, fourPlayers, unevenFinalMatches, 1, testFile);
+  } catch (const std::exception&) {
+    caughtUneven = true;
+  }
+  require(caughtUneven, "Must reject uneven final match counts");
+  require(!std::filesystem::exists(testFile), "Must not publish CSV when final match counts are uneven");
 }
 
 }  // namespace
