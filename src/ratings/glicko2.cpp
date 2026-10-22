@@ -227,6 +227,10 @@ void generate_glicko2_prediction(int run_id, fs::path file_path){
             current_period = stoi(row.at(1));
         }
         //対戦結果の登録
+        if(row.at(2) == row.at(3)){
+            cerr << "self matching refused." << endl;
+            continue;
+        }
         players.at(stoi(row.at(2)))->push_result(stod(row.at(4)),stoi(row.at(3)));
         players.at(stoi(row.at(3)))->push_result(1 - stod(row.at(4)),stoi(row.at(2)));
     }
@@ -238,7 +242,3 @@ void generate_glicko2_prediction(int run_id, fs::path file_path){
     for(auto [_, player]:players) delete(player);
 }
 
-
-int main(){
-    generate_glicko2_prediction(-1);
-}
