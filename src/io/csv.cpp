@@ -265,4 +265,86 @@ void publishMseCsv(const std::string& temporaryPath, const std::string& outputPa
   }
 }
 
+void writeEloPredictions(
+  int runID,
+  const std::vector<int>& players,
+  const std::vector<Match>& matches,
+  int evaluationIntervalMatchesPerPlayer,
+  const std::string& outputPath,
+  const ratings::EloParameters& params
+) {
+  if (runID < 0 || evaluationIntervalMatchesPerPlayer <= 0 || players.empty()) {
+    throw std::invalid_argument("Invalid arguments for writeEloPredictions");
+  }
+
+  // 既存ファイルの保護: 出力先が既に存在する場合はエラーにする
+  if (std::filesystem::exists(std::filesystem::symlink_status(outputPath))) {
+    throw std::runtime_error("出力先ファイルがすでに存在します: " + outputPath);
+  }
+
+  const int totalPlayers = static_cast<int>(players.size());
+  const int matchesPerRound = totalPlayers / 2;
+
+  // Elo計算機を用意
+  ratings::EloRating elo(players, params);
+
+  // 途中で失敗した際に不完全なファイルが残らないよう、一時ファイルへ書き込む
+  const std::string tmpPath = outputPath + ".tmp";
+  // 以前の一時ファイルが残っていれば安全に削除
+  std::filesystem::remove(tmpPath);
+
+  try {
+    std::ofstream file(tmpPath);
+    if (!file.is_open()) {
+      throw std::runtime_error("一時ファイルを開けません: " + tmpPath);
+    }
+
+    file.imbue(std::locale::classic());
+    file << "run_id,matches_per_player,player_a,player_b,predicted_p_a_wins\n";
+    file << std::setprecision(std::numeric_limits<double>::max_digits10);
+
+    for (std::size_t i = 0; i < matches.size(); ++i) {
+      elo.updateMatch(matches[i]);
+
+      // ラウンド完了の判定
+      if ((i + 1) % matchesPerRound == 0) {
+        const int currentMatches = static_cast<int>((i + 1) / matchesPerRound);
+
+        if (currentMatches % evaluationIntervalMatchesPerPlayer == 0) {
+          // 各人の実際の試合数を確認し、欠損・重複データがないことを検証する
+          for (int p = 0; p < totalPlayers; ++p) {
+            if (elo.matchCount(p) != currentMatches) {
+              throw std::runtime_error("プレイヤーの消化試合数が不揃いです（欠損・重複履歴の検出）");
+            }
+          }
+
+          // 全ペアの勝率を出力
+          for (int a = 0; a < totalPlayers; ++a) {
+            for (int b = a + 1; b < totalPlayers; ++b) {
+              file << runID << ','
+                   << currentMatches << ','
+                   << a << ','
+                   << b << ','
+                   << elo.predictWinProbability(a, b) << '\n';
+            }
+          }
+        }
+      }
+    }
+
+    file.close();
+    if (!file) {
+      throw std::runtime_error("ファイルの書き込みに失敗しました: " + tmpPath);
+    }
+
+    // 書き込みが正常に完了したら、本来のファイル名へ安全に移動する
+    std::filesystem::rename(tmpPath, outputPath);
+  } catch (...) {
+    // 例外が発生した場合は不完全な一時ファイルを削除して再送出する
+    std::filesystem::remove(tmpPath);
+    throw;
+  }
+}
+
 }  // namespace project10::io
+

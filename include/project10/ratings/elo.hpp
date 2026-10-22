@@ -2,13 +2,14 @@
 
 #include "project10/simulation/matches.hpp"
 
-#include <string>
 #include <vector>
 
 namespace project10::ratings {
 
 // Eloレーティングのハイパーパラメータ。
-// 出典: Arpad E. Elo, "The Rating of Chessplayers, Past and Present" (1978) / FIDE標準ロジスティック式。
+// 出典: Arpad E. Elo, "The Rating of Chessplayers, Past and Present" (1978).
+// 初期値1500・Scale=400はElo(1978)および全米チェス連盟(USCF)等で標準的に採用されている値。
+// K=32はUSCF等の初期・暫定プレイヤー向け基準値として広く使用される設定。
 struct EloParameters {
   double initialRating = 1500.0;
   double kFactor = 32.0;
@@ -16,6 +17,7 @@ struct EloParameters {
 };
 
 // 2人の推定レートから、playerAがplayerBに勝つ予測確率 E_A = 1 / (1 + 10^((R_B - R_A) / scale)) を返す。
+// レート差が極端に大きい場合はオーバーフローを避けるため安全にクリッピングを行う。
 double calculateEloWinProbability(
   double ratingA,
   double ratingB,
@@ -55,16 +57,5 @@ private:
   std::vector<double> ratings_;
   std::vector<int> matchCounts_;
 };
-
-// 観測した対戦履歴を先頭から順に毎試合更新し、各人evaluationIntervalMatchesPerPlayer試合ごとの
-// チェックポイントで i < j の全ペアの予測勝率をCSV（elo.csv形式）へ出力する。
-void writeEloPredictions(
-  int runID,
-  const std::vector<int>& players,
-  const std::vector<Match>& matches,
-  int evaluationIntervalMatchesPerPlayer,
-  const std::string& outputPath,
-  const EloParameters& params = EloParameters{}
-);
 
 }  // namespace project10::ratings

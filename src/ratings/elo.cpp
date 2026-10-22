@@ -1,13 +1,12 @@
 #include "project10/ratings/elo.hpp"
 
 #include <cmath>
-#include <fstream>
-#include <iomanip>
 #include <stdexcept>
 
 namespace project10::ratings {
 namespace {
 
+// パラメータが正常な有限値（かつ正の値）であることを確認する
 void validateParameters(const EloParameters& params) {
   if (!std::isfinite(params.initialRating)) {
     throw std::invalid_argument("initialRating must be finite");
@@ -41,6 +40,16 @@ double calculateEloWinProbability(
 
   const double diff = ratingB - ratingA;
   const double exponent = diff / scale;
+
+  // レート差が極端に大きい場合、10^exponent のオーバーフローを防ぐためにクリッピング
+  // double型の10進数表現の上限は約308乗なので、300を超えたら安全に0.0または1.0を返す
+  if (exponent > 300.0) {
+    return 0.0;
+  }
+  if (exponent < -300.0) {
+    return 1.0;
+  }
+
   return 1.0 / (1.0 + std::pow(10.0, exponent));
 }
 
@@ -110,39 +119,44 @@ double EloRating::predictWinProbability(int playerA, int playerB) const {
   validatePlayerID(playerA);
   validatePlayerID(playerB);
   if (playerA == playerB) {
-    throw std::invalid_argument("Self match is not allowed");
+    throw std::invalid_argument("A player cannot play against themselves");
   }
-  return calculateEloWinProbability(
-    ratings_[playerA],
-    ratings_[playerB],
-    params_.scale
-  );
+  return calculateEloWinProbability(ratings_[playerA], ratings_[playerB], params_.scale);
 }
 
-// 1試合の結果（resultA: 1=勝ち, 0=負け）をもとに点数を更新する
+// 試合結果をもとに、2人のレートを更新する
 void EloRating::updateMatch(int playerA, int playerB, int resultA) {
   validatePlayerID(playerA);
   validatePlayerID(playerB);
   if (playerA == playerB) {
-    throw std::invalid_argument("Self match is not allowed");
+    throw std::invalid_argument("A player cannot play against themselves");
   }
   if (resultA != 0 && resultA != 1) {
-    throw std::invalid_argument("resultA must be 0 or 1");
+    throw std::invalid_argument("resultA must be 1 (win) or 0 (loss)");
   }
 
-  // 1. Aが勝つ予想確率を計算
+  // 1. 試合前のレートから「Aが勝つ確率」を計算
   const double expectedA = predictWinProbability(playerA, playerB);
+  const double actualA = static_cast<double>(resultA);
 
-  // 2. 変動量を計算: K * (実際の結果 - 予想確率)
-  const double delta = params_.kFactor * (resultA - expectedA);
+  // 2. 公式に従って変動量を計算: Δ = K * (実結果 - 予想勝率)
+  const double delta = params_.kFactor * (actualA - expectedA);
 
-  // 3. レートを更新（Aが増えた分、Bを減らす）
-  ratings_[playerA] += delta;
-  ratings_[playerB] -= delta;
+  // 3. レートを更新（Aが増えた分だけBは減る）
+  const double newRatingA = ratings_[playerA] + delta;
+  const double newRatingB = ratings_[playerB] - delta;
 
-  // 4. 試合数を1増やす
-  matchCounts_[playerA]++;
-  matchCounts_[playerB]++;
+  // 4. 更新後のレートが有限値であることを確認（極端な値の防御）
+  if (!std::isfinite(newRatingA) || !std::isfinite(newRatingB)) {
+    throw std::runtime_error("Rating update resulted in a non-finite value");
+  }
+
+  ratings_[playerA] = newRatingA;
+  ratings_[playerB] = newRatingB;
+
+  // 5. 試合数を1増やす
+  matchCounts_[playerA] += 1;
+  matchCounts_[playerB] += 1;
 }
 
 void EloRating::updateMatch(const Match& match) {
@@ -153,64 +167,6 @@ void EloRating::updateMatch(const Match& match) {
 void EloRating::validatePlayerID(int playerID) const {
   if (playerID < 0 || static_cast<std::size_t>(playerID) >= ratings_.size()) {
     throw std::invalid_argument("Unknown player ID");
-  }
-}
-
-// 全試合を順番に処理し、定期的に予測勝率をCSVファイルに書き出す
-void writeEloPredictions(
-  int runID,
-  const std::vector<int>& players,
-  const std::vector<Match>& matches,
-  int evaluationIntervalMatchesPerPlayer,
-  const std::string& outputPath,
-  const EloParameters& params
-) {
-  if (runID < 0 || evaluationIntervalMatchesPerPlayer <= 0 || players.empty()) {
-    throw std::invalid_argument("Invalid arguments for writeEloPredictions");
-  }
-
-  const int totalPlayers = static_cast<int>(players.size());
-  const int matchesPerRound = totalPlayers / 2;
-
-  // Eloの計算機を用意
-  EloRating elo(players, params);
-
-  // 保存先CSVファイルを開く
-  std::ofstream file(outputPath);
-  if (!file.is_open()) {
-    throw std::runtime_error("Failed to open: " + outputPath);
-  }
-
-  // 1行目のヘッダーを書く
-  file << "run_id,matches_per_player,player_a,player_b,predicted_p_a_wins\n";
-  file << std::setprecision(10);
-
-  // 1試合ずつ順番にレートを更新していく
-  for (std::size_t i = 0; i < matches.size(); ++i) {
-    elo.updateMatch(matches[i]);
-
-    // 全員が1試合終了したか判定
-    if ((i + 1) % matchesPerRound == 0) {
-      const int currentMatches = static_cast<int>((i + 1) / matchesPerRound);
-
-      // 指定された試合数に到達したら、全ペアの勝率を出力
-      if (currentMatches % evaluationIntervalMatchesPerPlayer == 0) {
-        for (int a = 0; a < totalPlayers; ++a) {
-          for (int b = a + 1; b < totalPlayers; ++b) {
-            file << runID << ','
-                 << currentMatches << ','
-                 << a << ','
-                 << b << ','
-                 << elo.predictWinProbability(a, b) << '\n';
-          }
-        }
-      }
-    }
-  }
-
-  file.close();
-  if (!file) {
-    throw std::runtime_error("Failed to write: " + outputPath);
   }
 }
 

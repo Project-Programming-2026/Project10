@@ -109,6 +109,13 @@ if(BUILD_TESTING)
   endif()
   add_test(NAME simulation_unit COMMAND simulation_tests)
 
+  add_executable(elo_tests tests/elo_tests.cpp)
+  target_link_libraries(elo_tests PRIVATE project10_core)
+  if(MSVC)
+    target_compile_options(elo_tests PRIVATE /utf-8)
+  endif()
+  add_test(NAME elo_unit COMMAND elo_tests)
+
   foreach(case generation reproducibility invalid_input invalid_config duplicate_keys missing_config
       overwrite output_paths symlink_outputs hardlink_outputs run_lock initial_scale seed_roles)
     add_test(NAME cli_${case}
