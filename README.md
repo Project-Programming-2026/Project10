@@ -2,7 +2,7 @@
 
 プロジェクト実験2026・第10班のリポジトリです。仮想的な対戦データを使い、レーティング手法が対戦勝率をどれだけ正確に推定できるか、対戦数とともに誤差がどう変化するかを比較します。
 
-現在は、設定ファイルの読み込み、プレイヤーID・潜在能力・真の勝率・対戦履歴の生成とCSV出力、および予測CSVを読み込む共通MSE評価を実装しています。C++17・CMakeでビルドし、CTestで検証できます。Elo・Glicko・Glicko-2・TrueSkill、推定レートからの予測勝率、複数試行の集計、グラフ生成は未実装です。MSE評価はテスト用の予測値で確認しており、各手法の比較結果はまだありません。
+現在は、設定ファイルの読み込み、プレイヤーID・潜在能力・真の勝率・対戦履歴の生成とCSV出力、予測CSVを読み込む共通MSE評価、および単一runのMSE比較グラフ生成を実装しています。C++17・CMakeでビルドし、CTestで検証できます。Elo・Glicko・Glicko-2・TrueSkill、推定レートからの予測勝率、複数試行の集計は未実装です。MSE評価・描画の検証値はテスト用で、各手法の比較結果はまだありません。
 
 ## 目次
 
@@ -62,7 +62,7 @@ $$
 p_{ij}=\Phi\left(\frac{\theta_i-\theta_j}{\sqrt{2}\sigma_g}\right)
 $$
 
-処理は次の順序で構成する計画です。現在は手順1の生成、手順4のMSE計算、手順5の手法別CSV出力を実装しています。手順2・3のレーティング・予測と、グラフ生成は未実装です。
+処理は次の順序で構成する計画です。現在は手順1の生成、手順4のMSE計算、手順5の手法別CSV出力・グラフ生成を実装しています。手順2・3のレーティング・予測は未実装です。
 
 1. 仮想プレイヤーと正解の勝率を生成し、共通の対戦履歴を作る。
 2. 各手法にプレイヤーIDと観測済みの対戦履歴を渡す。潜在能力と正解の勝率は渡さない。
@@ -91,6 +91,7 @@ $$
 ├── configs/
 │   └── run_0000/config.json        1試行分の設定例
 ├── docs/
+│   ├── plotting.md               描画方式の比較・依存・検証記録
 │   ├── references.md             実装の参考資料と採用範囲
 │   └── samples/
 │       └── run_0000-provenance.md 共有サンプルの来歴と再現確認
@@ -104,6 +105,7 @@ $$
 │   │   ├── csv.hpp                CSV入出力の公開ヘッダー
 │   │   └── run_lock.hpp           生成・評価で共用するrunの排他処理
 │   ├── evaluation/
+│   │   ├── plot.hpp               単一runのMSE描画インターフェース
 │   │   └── mse.hpp                MSE評価の型と公開インターフェース
 │   └── simulation/
 │       ├── players.hpp            プレイヤーID生成の公開ヘッダー
@@ -113,7 +115,9 @@ $$
 ├── src/
 │   ├── main.cpp                   標準入力・生成・出力処理の統括
 │   ├── evaluate_main.cpp          1試行・1手法の評価処理の統括
+│   ├── plot_main.cpp              1試行のMSE比較グラフ生成の入口
 │   ├── evaluation/
+│   │   ├── plot.cpp               検証済みMSEの描画・gnuplot起動
 │   │   └── MSE.cpp                予測の検証と評価時点ごとのMSE計算
 │   ├── io/
 │   │   ├── config.cpp             JSON読み込み・検証・設定の保存
@@ -124,6 +128,9 @@ $$
 │       ├── probit.cpp             プロビットモデルによる真の勝率計算
 │       └── matches.cpp            ラウンドごとのペア分け・勝敗生成
 ├── tests/
+│   ├── plot_tests.cpp             MSE描画入力の正常系・異常系
+│   ├── plot.cmake                 描画CLIとSVG・PNGの結合確認
+│   ├── plot_renderer_stub.cpp     描画失敗処理の検証用代替プログラム
 │   ├── simulation_tests.cpp       生成器・勝率計算の単体確認
 │   ├── evaluation_tests.cpp       MSEの手計算照合・CSV検証・初期規模確認
 │   ├── evaluation.cmake           評価CLIの入出力・上書き拒否・排他確認
@@ -178,7 +185,7 @@ ctest --test-dir build/vs -C Debug --output-on-failure
 
 WindowsではGCC 16.2.0（MSYS2 UCRT64）・CMake 4.4.4・Ninja 1.13.2でビルドとCTestを確認しています。Linuxでは2026-10-19にWSL2 Ubuntu 24.04.5 LTS・GCC 13.3.0・CMake 3.28.3・Ninja 1.11.1で、DebugビルドとCTest全14件の成功を確認しました。Linuxのリンク保護テストもスキップせず成功しています。Visual Studio手順は未検証です。
 
-`project10_core` に設定・生成・評価処理、`project10` に生成の入口、`project10_evaluate` に評価の入口をまとめ、全 `.cpp` を明示的に登録しています。テスト不要の構成は `-DBUILD_TESTING=OFF` で作成できます。Ninjaがない環境では別領域で `cmake -S . -B build/make -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Debug` と構成し、以降のビルド・CTestにも `build/make` を指定できます。
+`project10_core` に設定・生成・評価処理、`project10` に生成の入口、`project10_evaluate` に評価の入口、`project10_plotting`・`project10_plot` に描画処理と入口をまとめ、全 `.cpp` を明示的に登録しています。テスト不要の構成は `-DBUILD_TESTING=OFF` で作成できます。Ninjaがない環境では別領域で `cmake -S . -B build/make -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Debug` と構成し、以降のビルド・CTestにも `build/make` を指定できます。
 
 ### Windowsでバッチから実行
 
@@ -321,6 +328,45 @@ run ID、続いて `Elo`・`Glicko`・`Glicko2`・`TrueSkill` のいずれかを
 
 生成と共通のrunロックを保持し、全入力の検証と一時ファイルの保存を終えてから、ハードリンク作成でMSE CSVを公開します。この操作は出力先が存在すれば失敗するため、ロックを使わない別処理が直前に保存したファイルも置き換えません。公開後に一時ファイルを削除します。ロック領域と出力先は同一ファイルシステムに置き、ハードリンク非対応などで作成できない場合はエラーで停止します。既存のMSE出力はリンクも含めて拒否し、上書き確認は行いません。`samples/` には正解勝率が含まれないため、評価には来歴に沿って再生成し、ハッシュを照合した正解情報が別途必要です。
 
+### MSEの比較グラフ生成
+
+`project10_plot` は生成・評価とは独立したC++17のコマンドです。ビルドには追加ライブラリ不要で、描画時だけ **gnuplot 5.4以降（`svg`端末、PNG使用時は`pngcairo`端末）** が必要です。Python・GUI・画面表示は使いません。技術比較、ライセンスと検証環境は [描画方式の選定](docs/plotting.md) を参照してください。
+
+WSL2 Ubuntuでは `sudo apt install gnuplot-nox`、MSYS2 UCRT64では `pacman -S mingw-w64-ucrt-x86_64-gnuplot` で導入します。`gnuplot --version` で確認してください。オフライン環境では実行ファイルとその依存を事前に用意します。CMake構成・ビルド中には取得しません。通常のCMakeビルド手順で `project10_plot` も生成されます。
+
+リポジトリ直下で起動し、run IDを標準入力へ入力します。
+
+```sh
+./build/dev/project10_plot --png
+# Enter run ID: に対象runのIDを入力
+```
+
+Windows（PowerShell）の例です。
+
+```powershell
+.\build\dev\project10_plot.exe --png
+# Enter run ID: に対象runのIDを入力
+```
+
+入力は `runs/run_XXXX/config.json` の `files.mse` に記載された `Elo`・`Glicko`・`Glicko2`・`TrueSkill` のCSVです。生成器・予測器・正解勝率は不要です。run直下の英数字・`_`・`-`・`.`からなる `.csv` 名を受け付け、パス・`..`・重複名は拒否します。設定にない手法・存在しないファイルは理由を表示して省略します。存在する不正なCSVは省略せずエラーにし、1手法もなければ停止します。
+
+ヘッダーは `run_id,matches_per_player,mse`、LF・CRLF、任意の行順に対応します。run IDの一致、正の評価間隔の倍数、総対戦数以内、評価時点の重複・欠落、MSEが0〜1の有限値であることを検証します。全手法で設定上の全評価時点が必要です。例として総対戦数25・間隔10なら10・20を要求し、一部手法だけ20が欠けた場合も、比較条件の不一致として停止します。補間・欠落行の除外はしません。
+
+出力構成は次のとおりです。これはパスの例であり、実験結果の例ではありません。
+
+```text
+runs/run_XXXX/graphs/
+  mse.svg   # 必須、1000×650、凡例・軸ラベル・グリッド付き
+  mse.png   # --png指定時のみ
+  plot.gp   # 検証済み数値・入力CSV名・描画条件を含む再描画用スクリプト
+```
+
+横軸は1人当たりの累積対戦数（0〜設定の総対戦数）、縦軸はMSE（0〜1）に固定します。手法ごとの色・線種・点形は参加手法が減っても変わりません。小さな差を拡大するための軸の切り取りは行いません。
+
+既存の `graphs/` は空でも上書きしません。再出力には `--name graphs-v2` のように新しい名前を指定します。名前には英数字・`_`・`-`を使います。gnuplotがPATHにない場合は `--gnuplot /path/to/gnuplot`（Windowsでは `--gnuplot C:/msys64/ucrt64/bin/gnuplot.exe`）で指定できます。起動失敗、非対応端末、描画失敗、画像の未生成はエラーとなり、今回作成した出力だけを片付けます。
+
+生成・評価と同じrunロックを使います。`plot.gp` は読み込んだ数値を内包するため、元CSVを変更せず再描画できます。再描画する場合も新しい作業ディレクトリにコピーし、そこで `gnuplot -d plot.gp` を実行してください。正式な結果では既存の再現性規約どおりコード・入力ハッシュ・gnuplotの版も別途記録します。複数runの平均・標準偏差・信頼区間は今回の実装範囲外です。
+
 ### 共通CSVの共有
 
 各担当が同じ入力を取得できるよう、[samples/run_0001/](samples/run_0001/README.md) に1,000人分の `players.csv` と100,000試合の `matches.csv`、設定・SHA-256・生成来歴をGit管理しています。CSVは合計約1.92MBです。取得後にハッシュを照合し、全手法へこの同じ2つのCSVを行順を保って渡します。正式な比較への採用はチーム確認事項です。
@@ -348,7 +394,11 @@ Get-FileHash .\runs\run_0001\config.json, .\runs\run_0001\players.csv, .\runs\ru
 
 ### テスト
 
-生成の既存14件に加え、MSEの単体・CSV確認とCLI確認を実行します。手計算例（許容絶対誤差 `1e-12`）、正解一致時のMSE=0、評価時点と行順、1,000人・499,500ペア、不正入力、各手法のファイル対応、保存済み設定の利用、上書き拒否・排他を検証します。テスト用の予測値は各手法の実験結果ではありません。MSE追加後のDebugビルドと全16件のCTestはLinux・GCC 15.2.0・Unix Makefilesで確認しています。今回追加した機能のWindowsでの実行は未確認です。
+描画用に `plot_csv_unit`（CSVの値・形式・評価時点）、`plot_contract`（CLI・省略・4手法・出力保護・失敗処理）、`plot_render`（本物のgnuplotでSVG・PNG生成）の3件を追加しています。`plot_contract` の描画代替プログラムは制御の検証専用で、実描画の根拠にはしません。`plot_render` は構成時にgnuplotが見つからなければ **Skipped** です。後から導入した場合はCMakeを再構成してください。架空の値・画像はビルド内の専用テスト領域にだけ置きます。
+
+2026-10-22にWSL2 Ubuntu・GCC 15.2.0・gnuplot 6.0.2で全19件成功、Windows・MSYS2 UCRT64・GCC 15.2.0・gnuplot 6.0.1で18件成功・リンク権限による既存1件のスキップを確認しました。描画の3件は両環境ですべて成功しています。条件と未検証範囲は [検証記録](docs/plotting.md#検証記録) を参照してください。
+
+生成の既存14件に加え、MSEの単体・CSV確認とCLI確認を実行します。手計算例（許容絶対誤差 `1e-12`）、正解一致時のMSE=0、評価時点と行順、1,000人・499,500ペア、不正入力、各手法のファイル対応、保存済み設定の利用、上書き拒否・排他を検証します。テスト用の予測値は各手法の実験結果ではありません。MSE追加時のDebugビルドと全16件のCTestはLinux・GCC 15.2.0・Unix Makefilesで確認しており、最新のWindowsを含む確認結果は前段の記録を参照してください。
 
 生成処理は単体確認と13種類のCLI結合確認で検証します。JSON設定の読み込み、重複キーや不正なID・設定の拒否、CSVヘッダー・人数・IDの一意性、潜在能力の有限性、同一シードの再現性、出力先を検証します。上書きは拒否・空欄・入力終了で既存ファイルを保護し、`y`・`Y` で変更した設定が反映され、無関係なファイルが残ることを確認します。勝率計算は等能力で0.5、能力差1・標準偏差1で約0.76025、勝敗方向の反転、確率の範囲、不正入力、極端な有限値を確認します。`ground_truth.csv` は8人でヘッダーを含む29行、全28ペアの重複・欠落がないことを確認し、再現性・上書き確認の照合対象にも含めます。対戦生成は8人・5ラウンド・2ラウンド1期間で、各人の対戦数、各ラウンドの重複・欠落、自己対戦、連続ID、期間境界と端数、勝敗の0/1を確認します。シードごとの役割と再現性も検証します。加えて依頼された初期条件の1,000人・200ラウンドを単体とCLIで実行し、100,000試合・20期間を確認します。
 
@@ -364,7 +414,7 @@ Get-FileHash .\runs\run_0001\config.json, .\runs\run_0001\players.csv, .\runs\ru
 | レーティング・勝率予測 | 実装は `src/ratings/`、公開ヘッダーは `include/project10/ratings/` |
 | MSE・複数試行の集計 | 実装は `src/evaluation/`、公開ヘッダーは `include/project10/evaluation/` |
 | JSON・共有するCSV入出力 | 実装は `src/io/`、公開ヘッダーは `include/project10/io/` |
-| テスト・グラフ生成 | テストは `tests/`、将来のPythonによるグラフ生成は `scripts/` |
+| テスト・グラフ生成 | テストは `tests/`、C++の描画は `src/evaluation/plot.cpp`・`include/project10/evaluation/plot.hpp` |
 
 この表の未実装領域のディレクトリは、実際のファイル追加時に作成します。各担当は小さな処理単位で実装し、共通利用する操作のみをヘッダーで公開します。`players.cpp`、`latent_parameters.cpp` は生成処理を担当し、`generatePlayers(int)` はIDの配列、`generateLatentParameters(...)` は潜在能力の配列を返します。`probit.cpp` の `calculateWinProbability(...)` は2人の潜在能力とパフォーマンス標準偏差から真の勝率を返します。`matches.cpp` の `generateMatches(...)` は対戦履歴の配列を返し、潜在能力・正解勝率は履歴に含めません。CSV出力は `io/csv.hpp` の `writePlayers`・`writeLatentParameters`・`writeGroundTruth`・`writeMatches` が担当し、`main.cpp` で接続します。
 
