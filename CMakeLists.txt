@@ -20,7 +20,6 @@ add_library(project10_core
   src/simulation/latent_parameters.cpp
   src/simulation/probit.cpp
   src/simulation/matches.cpp
-  src/evaluation/MSE.cpp
 )
 target_include_directories(project10_core PUBLIC
   "${CMAKE_CURRENT_SOURCE_DIR}/include"
@@ -34,28 +33,12 @@ endif()
 
 add_executable(project10 src/main.cpp)
 target_link_libraries(project10 PRIVATE project10_core)
-add_executable(project10_evaluate src/evaluate_main.cpp)
-target_link_libraries(project10_evaluate PRIVATE project10_core)
 if(MSVC)
   target_compile_options(project10 PRIVATE /utf-8)
-  target_compile_options(project10_evaluate PRIVATE /utf-8)
 endif()
 
 include(CTest)
 if(BUILD_TESTING)
-  add_executable(evaluation_tests tests/evaluation_tests.cpp)
-  target_link_libraries(evaluation_tests PRIVATE project10_core)
-  if(MSVC)
-    target_compile_options(evaluation_tests PRIVATE /utf-8)
-  endif()
-  add_test(NAME evaluation_unit COMMAND evaluation_tests "${CMAKE_CURRENT_BINARY_DIR}/test-work")
-  add_test(NAME cli_evaluation
-    COMMAND "${CMAKE_COMMAND}"
-      "-DPROGRAM=$<TARGET_FILE:project10_evaluate>"
-      "-DSAMPLE_CONFIG=${CMAKE_CURRENT_SOURCE_DIR}/configs/run_0000/config.json"
-      "-DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/test-work"
-      -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/evaluation.cmake"
-  )
   add_executable(simulation_tests tests/simulation_tests.cpp)
   target_link_libraries(simulation_tests PRIVATE project10_core)
   if(MSVC)

@@ -1,6 +1,5 @@
 #include "project10/io/config.hpp"
 #include "project10/io/csv.hpp"
-#include "project10/io/run_lock.hpp"
 #include "project10/simulation/latent_parameters.hpp"
 #include "project10/simulation/matches.hpp"
 #include "project10/simulation/players.hpp"
@@ -14,6 +13,33 @@
 #include <system_error>
 
 namespace fs = std::filesystem;
+
+namespace {
+
+// ディレクトリの排他的作成で、同じrunへ書く全プロセスを直列化する。
+// 出力先とは別に置き、上書き確認中から設定保存まで保持する。
+class RunLock {
+public:
+  explicit RunLock(const fs::path& path) : path_(path) {
+    if (!fs::create_directory(path_)) {
+      throw std::runtime_error("Run is already in use: " + path_.string());
+    }
+  }
+  ~RunLock() {
+    std::error_code error;
+    fs::remove(path_, error);
+    if (error) {
+      std::cerr << "Failed to release run lock: " << path_.string() << '\n';
+    }
+  }
+  RunLock(const RunLock&) = delete;
+  RunLock& operator=(const RunLock&) = delete;
+
+private:
+  fs::path path_;
+};
+
+}  // namespace
 
 // 1回の実行で、指定したrun IDの設定から1試行分のデータを生成・保存する。
 int main() {
@@ -48,9 +74,7 @@ int main() {
     // run IDを最低4桁にゼロ埋めし、この試行の結果をruns/run_XXXX/へまとめる。
     const auto outputDir = fs::path("runs") / project10::io::runDirectoryName(runID);
     fs::create_directories("runs");
-    const project10::io::RunLock lock(
-      fs::path("runs") / ("." + outputDir.filename().string() + ".lock")
-    );
+    const RunLock lock(fs::path("runs") / ("." + outputDir.filename().string() + ".lock"));
 
     // 新規作成できなかった場合は、空ディレクトリでも明示的な確認を求める。
     if (!fs::create_directory(outputDir)) {

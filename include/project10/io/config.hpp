@@ -25,18 +25,6 @@ struct SimulationConfig {
   std::string matchesFile;
 };
 
-struct EvaluationConfig {
-  int runID;
-  int numPlayers;
-  int matchesPerPlayer;
-  int interval;
-  std::string predictionsFile;
-  std::string mseFile;
-};
-
-// configs/ではなく、生成結果に保存した設定を読む。
-EvaluationConfig loadEvaluationConfig(int runID, const std::string& algorithm);
-
 std::string runDirectoryName(int runID);
 SimulationConfig loadConfig(int runID);
 void writeConfigSnapshot(

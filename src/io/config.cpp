@@ -26,7 +26,7 @@ json parseConfig(const std::string& text) {
     } else if (event == json::parse_event_t::key) {
       const auto& key = value.get_ref<const std::string&>();
       if (!objectKeys.back().insert(key).second) {
-        throw std::runtime_error("設定のキーが重複しています: " + key);
+        throw std::runtime_error("Duplicate config key: " + key);
       }
     }
     return true;
@@ -42,7 +42,7 @@ std::uint64_t readNonNegativeInteger(const json& object, const std::string& fiel
   if (value.is_number_integer() && value.get<std::int64_t>() >= 0) {
     return static_cast<std::uint64_t>(value.get<std::int64_t>());
   }
-  throw std::runtime_error(fieldName + "は0以上の整数で指定してください。");
+  throw std::runtime_error(fieldName + " must be a non-negative integer.");
 }
 
 // intへ変換する前に、項目ごとの下限とintの上限を確認する。
@@ -50,7 +50,7 @@ int readInteger(const json& object, const std::string& fieldName, int minimum) {
   const auto number = readNonNegativeInteger(object, fieldName);
   if (number < static_cast<std::uint64_t>(minimum) ||
       number > static_cast<std::uint64_t>(std::numeric_limits<int>::max())) {
-    throw std::runtime_error(fieldName + "が許容範囲外です。");
+    throw std::runtime_error(fieldName + " is out of range.");
   }
   return static_cast<int>(number);
 }
@@ -71,13 +71,13 @@ double readFiniteNumber(const json& object, const std::string& fieldName) {
 std::string readConfigText(const std::filesystem::path& path) {
   std::ifstream file(path, std::ios::binary);
   if (!file) {
-    throw std::runtime_error("設定ファイルを開けません: " + path.string());
+    throw std::runtime_error("Cannot open config file: " + path.string());
   }
 
   std::ostringstream contents;
   contents << file.rdbuf();
   if (file.bad()) {
-    throw std::runtime_error("設定ファイルを読み込めません: " + path.string());
+    throw std::runtime_error("Cannot read config file: " + path.string());
   }
   return contents.str();
 }
@@ -103,7 +103,7 @@ void validateExperimentSettings(const json& config) {
 
 std::string runDirectoryName(int runID) {
   if (runID < 0) {
-    throw std::invalid_argument("run IDが不正です。0以上の整数を指定してください。");
+    throw std::invalid_argument("Invalid run ID.");
   }
   std::string number = std::to_string(runID);
   if (number.size() < 4) {
@@ -170,44 +170,6 @@ SimulationConfig loadConfig(int runID) {
   }
 
   return settings;
-}
-
-EvaluationConfig loadEvaluationConfig(int runID, const std::string& algorithm) {
-  std::string stem;
-  if (algorithm == "Elo") stem = "elo";
-  else if (algorithm == "Glicko") stem = "glicko";
-  else if (algorithm == "Glicko2") stem = "glicko2";
-  else if (algorithm == "TrueSkill") stem = "trueskill";
-  else throw std::invalid_argument("未対応の手法名です: " + algorithm);
-
-  const auto path = std::filesystem::path("runs") / runDirectoryName(runID) / "config.json";
-  try {
-    const auto config = parseConfig(readConfigText(path));
-    EvaluationConfig settings{};
-    settings.runID = readInteger(config, "run_id", 0);
-    settings.numPlayers = readInteger(config, "num_players", 2);
-    settings.matchesPerPlayer = readInteger(config, "matches_per_player", 1);
-    settings.interval = readInteger(config, "evaluation_interval_matches_per_player", 1);
-    if (settings.runID != runID || settings.numPlayers % 2 != 0 ||
-        settings.matchesPerPlayer < settings.interval) {
-      throw std::runtime_error("評価設定が不正か、run IDが一致していません。");
-    }
-    const auto& files = config.at("files");
-    settings.predictionsFile = files.at("predictions").at(algorithm).get<std::string>();
-    settings.mseFile = files.at("mse").at(algorithm).get<std::string>();
-    // 既存の数値CSV契約に限定し、入力や別手法の結果への書き込みを防ぐ。
-    if (files.at("players") != "players.csv" || files.at("ground_truth") != "ground_truth.csv" ||
-        settings.predictionsFile != stem + ".csv" || settings.mseFile != stem + "_mse.csv") {
-      throw std::runtime_error("評価用のファイル名が規定と一致していません。");
-    }
-    return settings;
-  } catch (const json::parse_error&) {
-    throw std::runtime_error("設定JSONの構文が不正です: " + path.string());
-  } catch (const json::out_of_range&) {
-    throw std::runtime_error("設定JSONに必要な項目がありません: " + path.string());
-  } catch (const json::type_error&) {
-    throw std::runtime_error("設定JSONの値の型が正しくありません: " + path.string());
-  }
 }
 
 void writeConfigSnapshot(
