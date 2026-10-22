@@ -64,6 +64,13 @@ if(BUILD_TESTING)
   endif()
   add_test(NAME simulation_unit COMMAND simulation_tests)
 
+  add_executable(glicko_tests tests/glicko_tests.cpp)
+  target_link_libraries(glicko_tests PRIVATE project10_core)
+  if(MSVC)
+    target_compile_options(glicko_tests PRIVATE /utf-8)
+  endif()
+  add_test(NAME glicko_unit COMMAND glicko_tests)
+
   foreach(case generation reproducibility invalid_input invalid_config duplicate_keys missing_config
       overwrite output_paths symlink_outputs hardlink_outputs run_lock initial_scale seed_roles)
     add_test(NAME cli_${case}
