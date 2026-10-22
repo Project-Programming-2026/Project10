@@ -23,6 +23,7 @@ add_library(project10_core
   src/simulation/run.cpp
   src/evaluation/MSE.cpp
   src/evaluation/run.cpp
+  src/ratings/elo.cpp
 )
 target_include_directories(project10_core PUBLIC
   "${CMAKE_CURRENT_SOURCE_DIR}/include"

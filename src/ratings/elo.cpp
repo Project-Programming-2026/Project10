@@ -9,8 +9,14 @@ namespace project10::ratings {
 namespace {
 
 void validateParameters(const EloParameters& params) {
-  if (params.kFactor <= 0.0 || params.scale <= 0.0) {
-    throw std::invalid_argument("kFactor and scale must be positive");
+  if (!std::isfinite(params.initialRating)) {
+    throw std::invalid_argument("initialRating must be finite");
+  }
+  if (!std::isfinite(params.kFactor) || params.kFactor <= 0.0) {
+    throw std::invalid_argument("kFactor must be positive and finite");
+  }
+  if (!std::isfinite(params.scale) || params.scale <= 0.0) {
+    throw std::invalid_argument("scale must be positive and finite");
   }
 }
 
@@ -23,8 +29,11 @@ double calculateEloWinProbability(
   double ratingB,
   double scale
 ) {
-  if (scale <= 0.0) {
-    throw std::invalid_argument("scale must be positive");
+  if (!std::isfinite(scale) || scale <= 0.0) {
+    throw std::invalid_argument("scale must be positive and finite");
+  }
+  if (!std::isfinite(ratingA) || !std::isfinite(ratingB)) {
+    throw std::invalid_argument("ratings must be finite");
   }
   if (ratingA == ratingB) {
     return 0.5;
