@@ -26,7 +26,7 @@ json parseConfig(const std::string& text) {
     } else if (event == json::parse_event_t::key) {
       const auto& key = value.get_ref<const std::string&>();
       if (!objectKeys.back().insert(key).second) {
-        throw std::runtime_error("Duplicate config key: " + key);
+        throw std::runtime_error("設定のキーが重複しています: " + key);
       }
     }
     return true;
@@ -42,7 +42,7 @@ std::uint64_t readNonNegativeInteger(const json& object, const std::string& fiel
   if (value.is_number_integer() && value.get<std::int64_t>() >= 0) {
     return static_cast<std::uint64_t>(value.get<std::int64_t>());
   }
-  throw std::runtime_error(fieldName + " must be a non-negative integer.");
+  throw std::runtime_error(fieldName + "は0以上の整数で指定してください。");
 }
 
 // intへ変換する前に、項目ごとの下限とintの上限を確認する。
@@ -50,7 +50,7 @@ int readInteger(const json& object, const std::string& fieldName, int minimum) {
   const auto number = readNonNegativeInteger(object, fieldName);
   if (number < static_cast<std::uint64_t>(minimum) ||
       number > static_cast<std::uint64_t>(std::numeric_limits<int>::max())) {
-    throw std::runtime_error(fieldName + " is out of range.");
+    throw std::runtime_error(fieldName + "が許容範囲外です。");
   }
   return static_cast<int>(number);
 }
@@ -71,13 +71,13 @@ double readFiniteNumber(const json& object, const std::string& fieldName) {
 std::string readConfigText(const std::filesystem::path& path) {
   std::ifstream file(path, std::ios::binary);
   if (!file) {
-    throw std::runtime_error("Cannot open config file: " + path.string());
+    throw std::runtime_error("設定ファイルを開けません: " + path.string());
   }
 
   std::ostringstream contents;
   contents << file.rdbuf();
   if (file.bad()) {
-    throw std::runtime_error("Cannot read config file: " + path.string());
+    throw std::runtime_error("設定ファイルを読み込めません: " + path.string());
   }
   return contents.str();
 }
@@ -103,7 +103,7 @@ void validateExperimentSettings(const json& config) {
 
 std::string runDirectoryName(int runID) {
   if (runID < 0) {
-    throw std::invalid_argument("Invalid run ID.");
+    throw std::invalid_argument("run IDが不正です。0以上の整数を指定してください。");
   }
   std::string number = std::to_string(runID);
   if (number.size() < 4) {
@@ -170,6 +170,100 @@ SimulationConfig loadConfig(int runID) {
   }
 
   return settings;
+}
+
+RatingConfig loadTrueSkillConfig(int runID) {
+  const auto path = std::filesystem::path("runs") / runDirectoryName(runID) / "config.json";
+  const auto config = parseConfig(readConfigText(path));
+  RatingConfig result{readInteger(config, "num_players", 2),
+                      readInteger(config, "matches_per_player", 1),
+                      readInteger(config, "evaluation_interval_matches_per_player", 1),
+                      readInteger(config, "rating_period_matches_per_player", 1),
+                      config.at("files").at("predictions").at("TrueSkill").get<std::string>()};
+  if (readInteger(config, "run_id", 0) != runID || result.numPlayers % 2 != 0 ||
+      result.matchesPerPlayer < result.interval) {
+    throw std::runtime_error("TrueSkillの設定またはrun IDが不正です。");
+  }
+  const auto& files = config.at("files");
+  if (files.at("players") != "players.csv" || files.at("matches") != "matches.csv" ||
+      result.predictionsFile != "trueskill.csv") {
+    throw std::runtime_error("TrueSkillのファイル名が規定と一致していません。");
+  }
+  return result;
+}
+
+EvaluationConfig loadEvaluationConfig(int runID, const std::string& algorithm) {
+  std::string stem;
+  if (algorithm == "Elo") stem = "elo";
+  else if (algorithm == "Glicko") stem = "glicko";
+  else if (algorithm == "Glicko2") stem = "glicko2";
+  else if (algorithm == "TrueSkill") stem = "trueskill";
+  else throw std::invalid_argument("未対応の手法名です: " + algorithm);
+
+  const auto path = std::filesystem::path("runs") / runDirectoryName(runID) / "config.json";
+  try {
+    const auto config = parseConfig(readConfigText(path));
+    EvaluationConfig settings{};
+    settings.runID = readInteger(config, "run_id", 0);
+    settings.numPlayers = readInteger(config, "num_players", 2);
+    settings.matchesPerPlayer = readInteger(config, "matches_per_player", 1);
+    settings.interval = readInteger(config, "evaluation_interval_matches_per_player", 1);
+    if (settings.runID != runID || settings.numPlayers % 2 != 0 ||
+        settings.matchesPerPlayer < settings.interval) {
+      throw std::runtime_error("評価設定が不正か、run IDが一致していません。");
+    }
+    const auto& files = config.at("files");
+    settings.predictionsFile = files.at("predictions").at(algorithm).get<std::string>();
+    settings.mseFile = files.at("mse").at(algorithm).get<std::string>();
+    // 既存の数値CSV契約に限定し、入力や別手法の結果への書き込みを防ぐ。
+    if (files.at("players") != "players.csv" || files.at("ground_truth") != "ground_truth.csv" ||
+        settings.predictionsFile != stem + ".csv" || settings.mseFile != stem + "_mse.csv") {
+      throw std::runtime_error("評価用のファイル名が規定と一致していません。");
+    }
+    return settings;
+  } catch (const json::parse_error&) {
+    throw std::runtime_error("設定JSONの構文が不正です: " + path.string());
+  } catch (const json::out_of_range&) {
+    throw std::runtime_error("設定JSONに必要な項目がありません: " + path.string());
+  } catch (const json::type_error&) {
+    throw std::runtime_error("設定JSONの値の型が正しくありません: " + path.string());
+  }
+}
+
+PlotConfig loadPlotConfig(int runID) {
+  const auto path = std::filesystem::path("runs") / runDirectoryName(runID) / "config.json";
+  try {
+    const auto config = parseConfig(readConfigText(path));
+    PlotConfig result{readInteger(config, "run_id", 0),
+                      readInteger(config, "matches_per_player", 1),
+                      readInteger(config, "evaluation_interval_matches_per_player", 1), {}};
+    if (result.runID != runID || result.matchesPerPlayer < result.interval) {
+      throw std::runtime_error("描画設定が不正か、run IDが一致していません。");
+    }
+    const auto& files = config.at("files").at("mse");
+    if (!files.is_object()) throw std::runtime_error("files.mseはオブジェクトで指定してください。");
+    const std::set<std::string> algorithms{"Elo", "Glicko", "Glicko2", "TrueSkill"};
+    std::set<std::string> names;
+    for (const auto& item : files.items()) {
+      if (algorithms.count(item.key()) == 0) {
+        throw std::runtime_error("未対応の手法名です: " + item.key());
+      }
+      const auto name = item.value().get<std::string>();
+      auto foldedName = name;
+      for (auto& c : foldedName) if (c >= 'A' && c <= 'Z') c += 'a' - 'A';
+      // run直下のCSVに限定。外部パス・制御文字・描画コマンドの混入を防ぐ。
+      if (name.size() <= 4 || name.substr(name.size() - 4) != ".csv" ||
+          name.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-.") !=
+            std::string::npos || name.find("..") != std::string::npos ||
+          !names.insert(foldedName).second) {
+        throw std::runtime_error("MSEファイル名が不正か重複しています: " + name);
+      }
+      result.mseFiles.emplace(item.key(), name);
+    }
+    return result;
+  } catch (const json::exception&) {
+    throw std::runtime_error("描画用の設定JSONの構文・必須項目・型を確認してください: " + path.string());
+  }
 }
 
 void writeConfigSnapshot(
