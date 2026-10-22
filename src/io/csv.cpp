@@ -142,8 +142,9 @@ void readCsv(const std::string& path, const std::string& header, std::size_t col
   if (!file.eof()) throw std::runtime_error("CSVファイルを読み込めません: " + path);
 }
 
-int integer(const std::string& cell) {
-  int value = 0;
+template <typename Integer = int>
+Integer integer(const std::string& cell) {
+  Integer value = 0;
   const auto result = std::from_chars(cell.data(), cell.data() + cell.size(), value);
   if (result.ec != std::errc{} || result.ptr != cell.data() + cell.size() || value < 0) {
     throw std::invalid_argument("0以上の整数で指定してください: " + cell);
@@ -175,6 +176,34 @@ void validatePlayersCsv(const std::string& path, int numPlayers) {
     ++count;
   });
   if (count != seen.size()) throw std::runtime_error("プレイヤーIDが不足しています: " + path);
+}
+
+std::vector<Match> readMatchesCsv(
+  const std::string& path, int numPlayers, int matchesPerPlayer, int period
+) {
+  if (numPlayers < 2 || numPlayers % 2 != 0 || matchesPerPlayer <= 0 || period <= 0) {
+    throw std::invalid_argument("対戦履歴の設定が不正です。");
+  }
+  std::vector<Match> matches;
+  std::vector<std::uint64_t> counts(numPlayers, 0);
+  const auto total = static_cast<std::uint64_t>(numPlayers / 2) * matchesPerPlayer;
+  readCsv(path, "match_id,period_id,player_a,player_b,result_a", 5, [&](const auto& fields) {
+    const Match match{integer<std::uint64_t>(fields[0]), integer(fields[1]),
+                      integer(fields[2]), integer(fields[3]), integer(fields[4])};
+    if (matches.size() >= total || match.matchID != matches.size() ||
+        static_cast<std::uint64_t>(match.periodID) != match.matchID / (numPlayers / 2) / period ||
+        match.playerA >= numPlayers || match.playerB >= numPlayers ||
+        match.playerA == match.playerB || match.resultA > 1) {
+      throw std::invalid_argument("試合ID・期間・プレイヤーID・勝敗が不正です。");
+    }
+    if (++counts[match.playerA] > static_cast<std::uint64_t>(matchesPerPlayer) ||
+        ++counts[match.playerB] > static_cast<std::uint64_t>(matchesPerPlayer)) {
+      throw std::invalid_argument("各人の対戦数が設定を超えています。");
+    }
+    matches.push_back(match);
+  });
+  if (matches.size() != total) throw std::runtime_error("対戦履歴が不足しています: " + path);
+  return matches;
 }
 
 evaluation::ProbabilityMatrix readGroundTruthCsv(const std::string& path, int numPlayers) {

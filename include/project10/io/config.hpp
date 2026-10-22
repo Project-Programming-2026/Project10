@@ -35,6 +35,16 @@ struct EvaluationConfig {
   std::string mseFile;
 };
 
+struct RatingConfig {
+  int numPlayers;
+  int matchesPerPlayer;
+  int interval;
+  int period;
+  std::string predictionsFile;
+};
+
+RatingConfig loadTrueSkillConfig(int runID);
+
 // configs/ではなく、生成結果に保存した設定を読む。
 EvaluationConfig loadEvaluationConfig(int runID, const std::string& algorithm);
 

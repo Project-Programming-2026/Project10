@@ -21,6 +21,7 @@ add_library(project10_core
   src/simulation/probit.cpp
   src/simulation/matches.cpp
   src/evaluation/MSE.cpp
+  src/ratings/trueskill.cpp
 )
 target_include_directories(project10_core PUBLIC
   "${CMAKE_CURRENT_SOURCE_DIR}/include"
@@ -36,6 +37,8 @@ add_executable(project10 src/main.cpp)
 target_link_libraries(project10 PRIVATE project10_core)
 add_executable(project10_evaluate src/evaluate_main.cpp)
 target_link_libraries(project10_evaluate PRIVATE project10_core)
+add_executable(project10_trueskill src/trueskill_main.cpp)
+target_link_libraries(project10_trueskill PRIVATE project10_core)
 add_library(project10_plotting src/evaluation/plot.cpp)
 target_link_libraries(project10_plotting PUBLIC project10_core)
 add_executable(project10_plot src/plot_main.cpp)
@@ -43,6 +46,7 @@ target_link_libraries(project10_plot PRIVATE project10_plotting)
 if(MSVC)
   target_compile_options(project10 PRIVATE /utf-8)
   target_compile_options(project10_evaluate PRIVATE /utf-8)
+  target_compile_options(project10_trueskill PRIVATE /utf-8)
   target_compile_options(project10_plotting PRIVATE /W4 /utf-8)
   target_compile_options(project10_plot PRIVATE /utf-8)
 else()
@@ -51,6 +55,21 @@ endif()
 
 include(CTest)
 if(BUILD_TESTING)
+  add_executable(trueskill_tests tests/trueskill_tests.cpp)
+  target_link_libraries(trueskill_tests PRIVATE project10_core)
+  if(MSVC)
+    target_compile_options(trueskill_tests PRIVATE /utf-8)
+  endif()
+  add_test(NAME trueskill_unit COMMAND trueskill_tests "${CMAKE_CURRENT_BINARY_DIR}/test-work/trueskill-unit")
+  add_test(NAME cli_trueskill
+    COMMAND "${CMAKE_COMMAND}"
+      "-DPROGRAM=$<TARGET_FILE:project10_trueskill>"
+      "-DGENERATOR=$<TARGET_FILE:project10>"
+      "-DEVALUATOR=$<TARGET_FILE:project10_evaluate>"
+      "-DSAMPLE_CONFIG=${CMAKE_CURRENT_SOURCE_DIR}/configs/run_0000/config.json"
+      "-DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/test-work"
+      -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/trueskill.cmake"
+  )
   add_executable(plot_tests tests/plot_tests.cpp)
   target_link_libraries(plot_tests PRIVATE project10_core)
   add_executable(plot_renderer_stub tests/plot_renderer_stub.cpp)
