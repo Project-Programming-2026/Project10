@@ -24,6 +24,9 @@ namespace project10::io {
 void validatePlayersCsv(const std::string& path, int numPlayers);
 evaluation::ProbabilityMatrix readGroundTruthCsv(const std::string& path, int numPlayers);
 void readPredictionsCsv(const std::string& path, evaluation::MseEvaluator& evaluator);
+std::vector<evaluation::MseResult> readMseCsv(
+  const std::string& path, int runID, int matchesPerPlayer, int interval
+);
 void writeMseCsv(
   const std::string& path, int runID, const std::vector<evaluation::MseResult>& results
 );

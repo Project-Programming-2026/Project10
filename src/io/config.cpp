@@ -210,6 +210,42 @@ EvaluationConfig loadEvaluationConfig(int runID, const std::string& algorithm) {
   }
 }
 
+PlotConfig loadPlotConfig(int runID) {
+  const auto path = std::filesystem::path("runs") / runDirectoryName(runID) / "config.json";
+  try {
+    const auto config = parseConfig(readConfigText(path));
+    PlotConfig result{readInteger(config, "run_id", 0),
+                      readInteger(config, "matches_per_player", 1),
+                      readInteger(config, "evaluation_interval_matches_per_player", 1), {}};
+    if (result.runID != runID || result.matchesPerPlayer < result.interval) {
+      throw std::runtime_error("描画設定が不正か、run IDが一致していません。");
+    }
+    const auto& files = config.at("files").at("mse");
+    if (!files.is_object()) throw std::runtime_error("files.mseはオブジェクトで指定してください。");
+    const std::set<std::string> algorithms{"Elo", "Glicko", "Glicko2", "TrueSkill"};
+    std::set<std::string> names;
+    for (const auto& item : files.items()) {
+      if (algorithms.count(item.key()) == 0) {
+        throw std::runtime_error("未対応の手法名です: " + item.key());
+      }
+      const auto name = item.value().get<std::string>();
+      auto foldedName = name;
+      for (auto& c : foldedName) if (c >= 'A' && c <= 'Z') c += 'a' - 'A';
+      // run直下のCSVに限定。外部パス・制御文字・描画コマンドの混入を防ぐ。
+      if (name.size() <= 4 || name.substr(name.size() - 4) != ".csv" ||
+          name.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-.") !=
+            std::string::npos || name.find("..") != std::string::npos ||
+          !names.insert(foldedName).second) {
+        throw std::runtime_error("MSEファイル名が不正か重複しています: " + name);
+      }
+      result.mseFiles.emplace(item.key(), name);
+    }
+    return result;
+  } catch (const json::exception&) {
+    throw std::runtime_error("描画用の設定JSONの構文・必須項目・型を確認してください: " + path.string());
+  }
+}
+
 void writeConfigSnapshot(
   const SimulationConfig& config,
   const std::filesystem::path& outputDir
