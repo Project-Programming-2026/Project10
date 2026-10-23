@@ -208,7 +208,8 @@ void testInvalidInputs() {
     {0, 0, 0, 2, 1},   // 未知のプレイヤーID
     {0, 0, 1, 1, 1},   // 自己対戦
     {0, 0, 0, 1, 2},   // 範囲外の勝敗
-    {0, 0, 0, 1, -1}   // 範囲外の勝敗
+    {0, 0, 0, 1, -1},  // 範囲外の勝敗
+    {0, -1, 0, 1, 1}   // 負の期間ID（period_idは0始まり）
   };
   for (const Match& invalid : invalidMatches) {
     rejects([&states, invalid] { updateGlickoPeriod(states, {invalid}, 350.0, 50.0); });

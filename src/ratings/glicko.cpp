@@ -91,7 +91,7 @@ std::vector<GlickoState> updateGlickoPeriod(
         !isValidPlayer(match.playerB, states.size()) ||
         match.playerA == match.playerB ||
         (match.resultA != 0 && match.resultA != 1) ||
-        match.periodID != periodID) {
+        match.periodID < 0 || match.periodID != periodID) {
       throw std::invalid_argument("Invalid match in Glicko rating period");
     }
     matchIDs.push_back(match.matchID);
