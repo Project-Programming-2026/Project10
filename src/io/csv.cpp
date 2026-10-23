@@ -9,6 +9,7 @@
 #include <cmath>
 #include <filesystem>
 #include <locale>
+#include <map>
 #include <sstream>
 
 // CSV入出力の参考資料はdocs/references.mdを参照。
@@ -150,13 +151,13 @@ int integer(const std::string& cell) {
   return value;
 }
 
-double probability(const std::string& cell) {
+double probability(const std::string& cell, const std::string& label = "勝率") {
   std::istringstream input(cell);
   input.imbue(std::locale::classic());
   double value;
   if (!(input >> value) || !(input >> std::ws).eof() ||
       !std::isfinite(value) || value < 0.0 || value > 1.0) {
-    throw std::invalid_argument("勝率は0以上1以下の有限な値で指定してください: " + cell);
+    throw std::invalid_argument(label + "は0以上1以下の有限な値で指定してください: " + cell);
   }
   return value;
 }
@@ -204,6 +205,32 @@ void readPredictionsCsv(const std::string& path, evaluation::MseEvaluator& evalu
     evaluator.addPrediction({integer(fields[0]), integer(fields[1]), integer(fields[2]),
                              integer(fields[3]), probability(fields[4])});
   });
+}
+
+std::vector<evaluation::MseResult> readMseCsv(
+  const std::string& path, int runID, int matchesPerPlayer, int interval
+) {
+  if (runID < 0 || interval <= 0 || matchesPerPlayer < interval) {
+    throw std::invalid_argument("MSE読み込みの評価設定が不正です。");
+  }
+  std::map<int, double> points;
+  readCsv(path, "run_id,matches_per_player,mse", 3, [&](const auto& fields) {
+    if (integer(fields[0]) != runID) throw std::invalid_argument("MSEのrun IDが一致しません。");
+    const int checkpoint = integer(fields[1]);
+    if (checkpoint <= 0 || checkpoint > matchesPerPlayer || checkpoint % interval != 0) {
+      throw std::invalid_argument("MSEの評価時点が設定と一致しません。");
+    }
+    if (!points.emplace(checkpoint, probability(fields[2], "MSE")).second) {
+      throw std::invalid_argument("MSEの評価時点が重複しています。");
+    }
+  });
+  // 全手法を同一の設定上の評価時点へ照合する。欠落を交差集合で隠さない。
+  if (points.size() != static_cast<std::size_t>(matchesPerPlayer / interval)) {
+    throw std::runtime_error("MSEの評価時点が不足しています。手法間の比較条件が一致しません: " + path);
+  }
+  std::vector<evaluation::MseResult> results;
+  for (const auto& point : points) results.push_back({point.first, point.second});
+  return results;
 }
 
 void writeMseCsv(
