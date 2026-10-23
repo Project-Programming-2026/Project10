@@ -1,4 +1,5 @@
 #include "project10/io/csv.hpp"
+#include "project10/io/run_lock.hpp"
 #include "project10/simulation/probit.hpp"
 
 #include <fstream>
@@ -292,6 +293,112 @@ void publishMseCsv(const std::string& temporaryPath, const std::string& outputPa
     throw std::runtime_error("MSE出力を上書きせずに配置できません（エラーコード: " +
                              std::to_string(error.value()) + "）: " + outputPath);
   }
+}
+
+void writeEloPredictions(
+  int runID,
+  const std::vector<int>& players,
+  const std::vector<Match>& matches,
+  int evaluationIntervalMatchesPerPlayer,
+  const std::string& outputPath,
+  const ratings::EloParameters& params
+) {
+  if (runID < 0 || evaluationIntervalMatchesPerPlayer <= 0 || players.empty()) {
+    throw std::invalid_argument("Invalid arguments for writeEloPredictions");
+  }
+  if (players.size() % 2 != 0) {
+    throw std::invalid_argument("players count must be even");
+  }
+
+  // 既存ファイルの保護: 出力先が既に存在する場合は早期にエラーにする
+  if (std::filesystem::exists(std::filesystem::symlink_status(outputPath))) {
+    throw std::runtime_error("出力先ファイルがすでに存在します: " + outputPath);
+  }
+
+  const int totalPlayers = static_cast<int>(players.size());
+  const int matchesPerRound = totalPlayers / 2;
+
+  // Elo計算機を用意
+  ratings::EloRating elo(players, params);
+
+  // 排他制御用のロックディレクトリを作成し、その内部の一時ファイルへ書き込む
+  const std::filesystem::path lockDir(outputPath + ".lock");
+  const RunLock lock(lockDir);
+  const std::filesystem::path tmpPath = lockDir / "elo.csv.tmp";
+
+  try {
+    std::ofstream file(tmpPath);
+    if (!file.is_open()) {
+      throw std::runtime_error("一時ファイルを開けません: " + tmpPath.string());
+    }
+
+    file.imbue(std::locale::classic());
+    file << "run_id,matches_per_player,player_a,player_b,predicted_p_a_wins\n";
+    file << std::setprecision(std::numeric_limits<double>::max_digits10);
+
+    for (std::size_t i = 0; i < matches.size(); ++i) {
+      elo.updateMatch(matches[i]);
+
+      // ラウンド完了の判定
+      if ((i + 1) % matchesPerRound == 0) {
+        const int currentMatches = static_cast<int>((i + 1) / matchesPerRound);
+
+        if (currentMatches % evaluationIntervalMatchesPerPlayer == 0) {
+          // 各人の実際の試合数を確認し、欠損・重複データがないことを検証する
+          for (int p = 0; p < totalPlayers; ++p) {
+            if (elo.matchCount(p) != currentMatches) {
+              throw std::runtime_error("プレイヤーの消化試合数が不揃いです（欠損・重複履歴の検出）");
+            }
+          }
+
+          // 全ペアの勝率を出力
+          for (int a = 0; a < totalPlayers; ++a) {
+            for (int b = a + 1; b < totalPlayers; ++b) {
+              file << runID << ','
+                   << currentMatches << ','
+                   << a << ','
+                   << b << ','
+                   << elo.predictWinProbability(a, b) << '\n';
+            }
+          }
+        }
+      }
+    }
+
+    // 公開前に、端数ラウンドで終わっていないことと全員の最終試合数を検証する
+    if (matches.empty() || matches.size() % static_cast<std::size_t>(matchesPerRound) != 0) {
+      throw std::runtime_error("対戦履歴がラウンド途中で終わっています");
+    }
+    const int finalMatches = static_cast<int>(matches.size() / static_cast<std::size_t>(matchesPerRound));
+    for (int p = 0; p < totalPlayers; ++p) {
+      if (elo.matchCount(p) != finalMatches) {
+        throw std::runtime_error("最終的なプレイヤーの消化試合数が不揃いです（欠損・重複履歴の検出）");
+      }
+    }
+
+    file.close();
+    if (!file) {
+      throw std::runtime_error("ファイルの書き込みに失敗しました: " + tmpPath.string());
+    }
+
+    // ハードリンクで存在確認と公開を一体化（原子的に公開）し、既存ファイルの置換を防ぐ
+    std::error_code error;
+    std::filesystem::create_hard_link(tmpPath, outputPath, error);
+    if (error == std::errc::file_exists) {
+      throw std::runtime_error("出力先ファイルがすでに存在します: " + outputPath);
+    }
+    if (error) {
+      throw std::runtime_error("出力ファイルを上書きせずに配置できません（エラーコード: " +
+                               std::to_string(error.value()) + "）: " + outputPath);
+    }
+  } catch (...) {
+    std::error_code ignored;
+    std::filesystem::remove(tmpPath, ignored);
+    throw;
+  }
+
+  std::error_code cleanupError;
+  std::filesystem::remove(tmpPath, cleanupError);
 }
 
 }  // namespace project10::io
