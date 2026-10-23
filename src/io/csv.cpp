@@ -1,4 +1,5 @@
 #include "project10/io/csv.hpp"
+#include "project10/io/run_lock.hpp"
 #include "project10/simulation/probit.hpp"
 
 #include <fstream>
@@ -142,8 +143,9 @@ void readCsv(const std::string& path, const std::string& header, std::size_t col
   if (!file.eof()) throw std::runtime_error("CSVファイルを読み込めません: " + path);
 }
 
-int integer(const std::string& cell) {
-  int value = 0;
+template <typename Integer = int>
+Integer integer(const std::string& cell) {
+  Integer value = 0;
   const auto result = std::from_chars(cell.data(), cell.data() + cell.size(), value);
   if (result.ec != std::errc{} || result.ptr != cell.data() + cell.size() || value < 0) {
     throw std::invalid_argument("0以上の整数で指定してください: " + cell);
@@ -175,6 +177,34 @@ void validatePlayersCsv(const std::string& path, int numPlayers) {
     ++count;
   });
   if (count != seen.size()) throw std::runtime_error("プレイヤーIDが不足しています: " + path);
+}
+
+std::vector<Match> readMatchesCsv(
+  const std::string& path, int numPlayers, int matchesPerPlayer, int period
+) {
+  if (numPlayers < 2 || numPlayers % 2 != 0 || matchesPerPlayer <= 0 || period <= 0) {
+    throw std::invalid_argument("対戦履歴の設定が不正です。");
+  }
+  std::vector<Match> matches;
+  std::vector<std::uint64_t> counts(numPlayers, 0);
+  const auto total = static_cast<std::uint64_t>(numPlayers / 2) * matchesPerPlayer;
+  readCsv(path, "match_id,period_id,player_a,player_b,result_a", 5, [&](const auto& fields) {
+    const Match match{integer<std::uint64_t>(fields[0]), integer(fields[1]),
+                      integer(fields[2]), integer(fields[3]), integer(fields[4])};
+    if (matches.size() >= total || match.matchID != matches.size() ||
+        static_cast<std::uint64_t>(match.periodID) != match.matchID / (numPlayers / 2) / period ||
+        match.playerA >= numPlayers || match.playerB >= numPlayers ||
+        match.playerA == match.playerB || match.resultA > 1) {
+      throw std::invalid_argument("試合ID・期間・プレイヤーID・勝敗が不正です。");
+    }
+    if (++counts[match.playerA] > static_cast<std::uint64_t>(matchesPerPlayer) ||
+        ++counts[match.playerB] > static_cast<std::uint64_t>(matchesPerPlayer)) {
+      throw std::invalid_argument("各人の対戦数が設定を超えています。");
+    }
+    matches.push_back(match);
+  });
+  if (matches.size() != total) throw std::runtime_error("対戦履歴が不足しています: " + path);
+  return matches;
 }
 
 evaluation::ProbabilityMatrix readGroundTruthCsv(const std::string& path, int numPlayers) {
@@ -263,6 +293,112 @@ void publishMseCsv(const std::string& temporaryPath, const std::string& outputPa
     throw std::runtime_error("MSE出力を上書きせずに配置できません（エラーコード: " +
                              std::to_string(error.value()) + "）: " + outputPath);
   }
+}
+
+void writeEloPredictions(
+  int runID,
+  const std::vector<int>& players,
+  const std::vector<Match>& matches,
+  int evaluationIntervalMatchesPerPlayer,
+  const std::string& outputPath,
+  const ratings::EloParameters& params
+) {
+  if (runID < 0 || evaluationIntervalMatchesPerPlayer <= 0 || players.empty()) {
+    throw std::invalid_argument("Invalid arguments for writeEloPredictions");
+  }
+  if (players.size() % 2 != 0) {
+    throw std::invalid_argument("players count must be even");
+  }
+
+  // 既存ファイルの保護: 出力先が既に存在する場合は早期にエラーにする
+  if (std::filesystem::exists(std::filesystem::symlink_status(outputPath))) {
+    throw std::runtime_error("出力先ファイルがすでに存在します: " + outputPath);
+  }
+
+  const int totalPlayers = static_cast<int>(players.size());
+  const int matchesPerRound = totalPlayers / 2;
+
+  // Elo計算機を用意
+  ratings::EloRating elo(players, params);
+
+  // 排他制御用のロックディレクトリを作成し、その内部の一時ファイルへ書き込む
+  const std::filesystem::path lockDir(outputPath + ".lock");
+  const RunLock lock(lockDir);
+  const std::filesystem::path tmpPath = lockDir / "elo.csv.tmp";
+
+  try {
+    std::ofstream file(tmpPath);
+    if (!file.is_open()) {
+      throw std::runtime_error("一時ファイルを開けません: " + tmpPath.string());
+    }
+
+    file.imbue(std::locale::classic());
+    file << "run_id,matches_per_player,player_a,player_b,predicted_p_a_wins\n";
+    file << std::setprecision(std::numeric_limits<double>::max_digits10);
+
+    for (std::size_t i = 0; i < matches.size(); ++i) {
+      elo.updateMatch(matches[i]);
+
+      // ラウンド完了の判定
+      if ((i + 1) % matchesPerRound == 0) {
+        const int currentMatches = static_cast<int>((i + 1) / matchesPerRound);
+
+        if (currentMatches % evaluationIntervalMatchesPerPlayer == 0) {
+          // 各人の実際の試合数を確認し、欠損・重複データがないことを検証する
+          for (int p = 0; p < totalPlayers; ++p) {
+            if (elo.matchCount(p) != currentMatches) {
+              throw std::runtime_error("プレイヤーの消化試合数が不揃いです（欠損・重複履歴の検出）");
+            }
+          }
+
+          // 全ペアの勝率を出力
+          for (int a = 0; a < totalPlayers; ++a) {
+            for (int b = a + 1; b < totalPlayers; ++b) {
+              file << runID << ','
+                   << currentMatches << ','
+                   << a << ','
+                   << b << ','
+                   << elo.predictWinProbability(a, b) << '\n';
+            }
+          }
+        }
+      }
+    }
+
+    // 公開前に、端数ラウンドで終わっていないことと全員の最終試合数を検証する
+    if (matches.empty() || matches.size() % static_cast<std::size_t>(matchesPerRound) != 0) {
+      throw std::runtime_error("対戦履歴がラウンド途中で終わっています");
+    }
+    const int finalMatches = static_cast<int>(matches.size() / static_cast<std::size_t>(matchesPerRound));
+    for (int p = 0; p < totalPlayers; ++p) {
+      if (elo.matchCount(p) != finalMatches) {
+        throw std::runtime_error("最終的なプレイヤーの消化試合数が不揃いです（欠損・重複履歴の検出）");
+      }
+    }
+
+    file.close();
+    if (!file) {
+      throw std::runtime_error("ファイルの書き込みに失敗しました: " + tmpPath.string());
+    }
+
+    // ハードリンクで存在確認と公開を一体化（原子的に公開）し、既存ファイルの置換を防ぐ
+    std::error_code error;
+    std::filesystem::create_hard_link(tmpPath, outputPath, error);
+    if (error == std::errc::file_exists) {
+      throw std::runtime_error("出力先ファイルがすでに存在します: " + outputPath);
+    }
+    if (error) {
+      throw std::runtime_error("出力ファイルを上書きせずに配置できません（エラーコード: " +
+                               std::to_string(error.value()) + "）: " + outputPath);
+    }
+  } catch (...) {
+    std::error_code ignored;
+    std::filesystem::remove(tmpPath, ignored);
+    throw;
+  }
+
+  std::error_code cleanupError;
+  std::filesystem::remove(tmpPath, cleanupError);
 }
 
 }  // namespace project10::io
