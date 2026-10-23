@@ -9,6 +9,7 @@
 #include <limits>
 #include <sstream>
 #include <stdexcept>
+#include <utility>
 
 using namespace project10::ratings;
 
@@ -63,6 +64,50 @@ void testRatings() {
     rejects([&] { updateTrueSkill(copy, b, 1); });
     near(b.mu, before.mu);
     near(b.sigma, before.sigma);
+  }
+}
+
+std::pair<TrueSkillRating, long double> integratePosterior(
+  const TrueSkillRating& a, const TrueSkillRating& b, int result, int steps
+) {
+  std::array<long double, 3> moments{};
+  const long double h = 20.0L / steps;
+  const long double noise = std::sqrt(b.sigma * b.sigma + 2 * (25.0L / 6) * (25.0L / 6));
+  for (int i = 0; i <= steps; ++i) {
+    const long double z = -10 + i * h;
+    const long double difference = a.mu + a.sigma * z - b.mu;
+    const long double likelihood = std::erfc(-(result ? 1 : -1) * difference /
+                                              (noise * std::sqrt(2.0L))) / 2;
+    const long double weight = (i == 0 || i == steps) ? 1 : (i % 2 == 0 ? 2 : 4);
+    const long double density = weight * std::exp(-z * z / 2) * likelihood;
+    moments[0] += density;
+    moments[1] += density * z;
+    moments[2] += density * z * z;
+  }
+  const auto mean = moments[1] / moments[0];
+  const auto variance = moments[2] / moments[0] - mean * mean;
+  return {{static_cast<double>(a.mu + a.sigma * mean),
+           static_cast<double>(a.sigma * std::sqrt(variance))},
+          moments[0] * h / (3 * std::sqrt(2 * std::acos(-1.0L)))};
+}
+
+void testPosterior() {
+  for (int result : {0, 1}) {
+    const TrueSkillRating initialA{31, 3}, initialB{17, 7};
+    const TrueSkillRating priorA{31, std::hypot(3.0, 25.0 / 300)};
+    const TrueSkillRating priorB{17, std::hypot(7.0, 25.0 / 300)};
+    auto a = initialA, b = initialB;
+    updateTrueSkill(a, b, result);
+    for (int steps : {4000, 8000}) {
+      const auto expectedA = integratePosterior(priorA, priorB, result, steps).first;
+      const auto expectedB = integratePosterior(priorB, priorA, 1 - result, steps).first;
+      near(a.mu, expectedA.mu, 1e-10L);
+      near(a.sigma, expectedA.sigma, 1e-10L);
+      near(b.mu, expectedB.mu, 1e-10L);
+      near(b.sigma, expectedB.sigma, 1e-10L);
+      const auto forecast = integratePosterior(initialA, initialB, 1, steps).second;
+      near(predictTrueSkill(initialA, initialB), forecast, 1e-10L);
+    }
   }
 }
 
@@ -153,6 +198,7 @@ int main(int argc, char** argv) {
     require(argc == 2);
     std::filesystem::create_directories(argv[1]);
     testRatings();
+    testPosterior();
     testTail();
     testCsv(std::filesystem::path(argv[1]) / "trueskill-unit.csv");
     std::cout << "TrueSkillの数値・CSV検証に成功しました。\n";

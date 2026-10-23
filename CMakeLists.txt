@@ -71,6 +71,7 @@ if(BUILD_TESTING)
       "-DSAMPLE_CONFIG=${CMAKE_CURRENT_SOURCE_DIR}/configs/run_0000/config.json"
       "-DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/test-work"
       -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/trueskill.cmake"
+  )
   add_executable(run_services_tests tests/run_services_tests.cpp)
   target_link_libraries(run_services_tests PRIVATE project10_core nlohmann_json::nlohmann_json)
   if(MSVC)
