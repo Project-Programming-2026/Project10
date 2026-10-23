@@ -172,6 +172,26 @@ SimulationConfig loadConfig(int runID) {
   return settings;
 }
 
+RatingConfig loadTrueSkillConfig(int runID) {
+  const auto path = std::filesystem::path("runs") / runDirectoryName(runID) / "config.json";
+  const auto config = parseConfig(readConfigText(path));
+  RatingConfig result{readInteger(config, "num_players", 2),
+                      readInteger(config, "matches_per_player", 1),
+                      readInteger(config, "evaluation_interval_matches_per_player", 1),
+                      readInteger(config, "rating_period_matches_per_player", 1),
+                      config.at("files").at("predictions").at("TrueSkill").get<std::string>()};
+  if (readInteger(config, "run_id", 0) != runID || result.numPlayers % 2 != 0 ||
+      result.matchesPerPlayer < result.interval) {
+    throw std::runtime_error("TrueSkillの設定またはrun IDが不正です。");
+  }
+  const auto& files = config.at("files");
+  if (files.at("players") != "players.csv" || files.at("matches") != "matches.csv" ||
+      result.predictionsFile != "trueskill.csv") {
+    throw std::runtime_error("TrueSkillのファイル名が規定と一致していません。");
+  }
+  return result;
+}
+
 EvaluationConfig loadEvaluationConfig(int runID, const std::string& algorithm) {
   std::string stem;
   if (algorithm == "Elo") stem = "elo";

@@ -20,10 +20,13 @@ add_library(project10_core
   src/simulation/latent_parameters.cpp
   src/simulation/probit.cpp
   src/simulation/matches.cpp
+  src/ratings/glicko2.cpp
   src/simulation/run.cpp
   src/evaluation/MSE.cpp
+  src/ratings/trueskill.cpp
   src/evaluation/run.cpp
   src/ratings/glicko.cpp
+  src/ratings/elo.cpp
 )
 target_include_directories(project10_core PUBLIC
   "${CMAKE_CURRENT_SOURCE_DIR}/include"
@@ -39,6 +42,8 @@ add_executable(project10 src/main.cpp)
 target_link_libraries(project10 PRIVATE project10_core)
 add_executable(project10_evaluate src/evaluate_main.cpp)
 target_link_libraries(project10_evaluate PRIVATE project10_core)
+add_executable(project10_trueskill src/trueskill_main.cpp)
+target_link_libraries(project10_trueskill PRIVATE project10_core)
 add_library(project10_plotting src/evaluation/plot.cpp)
 target_link_libraries(project10_plotting PUBLIC project10_core)
 add_executable(project10_plot src/plot_main.cpp)
@@ -46,6 +51,7 @@ target_link_libraries(project10_plot PRIVATE project10_plotting)
 if(MSVC)
   target_compile_options(project10 PRIVATE /utf-8)
   target_compile_options(project10_evaluate PRIVATE /utf-8)
+  target_compile_options(project10_trueskill PRIVATE /utf-8)
   target_compile_options(project10_plotting PRIVATE /W4 /utf-8)
   target_compile_options(project10_plot PRIVATE /utf-8)
 else()
@@ -54,6 +60,21 @@ endif()
 
 include(CTest)
 if(BUILD_TESTING)
+  add_executable(trueskill_tests tests/trueskill_tests.cpp)
+  target_link_libraries(trueskill_tests PRIVATE project10_core)
+  if(MSVC)
+    target_compile_options(trueskill_tests PRIVATE /utf-8)
+  endif()
+  add_test(NAME trueskill_unit COMMAND trueskill_tests "${CMAKE_CURRENT_BINARY_DIR}/test-work/trueskill-unit")
+  add_test(NAME cli_trueskill
+    COMMAND "${CMAKE_COMMAND}"
+      "-DPROGRAM=$<TARGET_FILE:project10_trueskill>"
+      "-DGENERATOR=$<TARGET_FILE:project10>"
+      "-DEVALUATOR=$<TARGET_FILE:project10_evaluate>"
+      "-DSAMPLE_CONFIG=${CMAKE_CURRENT_SOURCE_DIR}/configs/run_0000/config.json"
+      "-DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/test-work"
+      -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/trueskill.cmake"
+  )
   add_executable(run_services_tests tests/run_services_tests.cpp)
   target_link_libraries(run_services_tests PRIVATE project10_core nlohmann_json::nlohmann_json)
   if(MSVC)
@@ -115,6 +136,12 @@ if(BUILD_TESTING)
     target_compile_options(glicko_tests PRIVATE /utf-8)
   endif()
   add_test(NAME glicko_unit COMMAND glicko_tests)
+  add_executable(elo_tests tests/elo_tests.cpp)
+  target_link_libraries(elo_tests PRIVATE project10_core)
+  if(MSVC)
+    target_compile_options(elo_tests PRIVATE /utf-8)
+  endif()
+  add_test(NAME elo_unit COMMAND elo_tests)
 
   foreach(case generation reproducibility invalid_input invalid_config duplicate_keys missing_config
       overwrite output_paths symlink_outputs hardlink_outputs run_lock initial_scale seed_roles)
