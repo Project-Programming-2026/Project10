@@ -7,6 +7,7 @@
 
 #include "project10/simulation/matches.hpp"
 
+#include <ostream>
 #include <vector>
 
 // 推定レートとその不確実性RD。生成器のperformance_stdとは別物。
@@ -36,4 +37,18 @@ std::vector<GlickoState> updateGlickoPeriod(
 double calculateGlickoWinProbability(
   const GlickoState& stateA,
   const GlickoState& stateB
+);
+
+// 試合順の対戦履歴をperiodIDごとに更新し、各人の累積対戦数がintervalの倍数になった
+// 期間の終了時に、全a < bの予測勝率を予測CSVの形式でoutputへ書く。
+// 期間の途中に評価時点がある場合や、期間の終了時に各人の対戦数が揃わない場合は拒否する。
+void writeGlickoPredictions(
+  std::ostream& output,
+  int runID,
+  int numPlayers,
+  int interval,
+  const std::vector<Match>& matches,
+  double initialRating,
+  double initialRD,
+  double rdGrowth
 );
