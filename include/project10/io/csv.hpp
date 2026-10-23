@@ -22,6 +22,9 @@ void writeGroundTruth(
 namespace project10::io {
 
 void validatePlayersCsv(const std::string& path, int numPlayers);
+std::vector<Match> readMatchesCsv(
+  const std::string& path, int numPlayers, int matchesPerPlayer, int period
+);
 evaluation::ProbabilityMatrix readGroundTruthCsv(const std::string& path, int numPlayers);
 void readPredictionsCsv(const std::string& path, evaluation::MseEvaluator& evaluator);
 std::vector<evaluation::MseResult> readMseCsv(
