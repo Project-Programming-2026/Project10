@@ -26,6 +26,7 @@ add_library(project10_core
   src/evaluation/MSE.cpp
   src/ratings/trueskill.cpp
   src/evaluation/run.cpp
+  src/evaluation/reuse.cpp
   src/ratings/glicko.cpp
   src/ratings/elo.cpp
 )
@@ -110,6 +111,18 @@ if(BUILD_TESTING)
   add_test(NAME plot_csv_unit COMMAND plot_tests "${CMAKE_CURRENT_BINARY_DIR}/test-work/plot-csv")
   # 描画プログラムは実行時だけ必要。構成時の取得・必須化は行わない。
   find_program(PROJECT10_GNUPLOT NAMES gnuplot gnuplot-nox)
+  foreach(mode contract render links)
+    add_test(NAME reuse_${mode}
+      COMMAND "${CMAKE_COMMAND}" "-DPROGRAM=$<TARGET_FILE:project10_run>"
+        "-DRENDERER=$<TARGET_FILE:batch_probe>" "-DEXE=${CMAKE_EXECUTABLE_SUFFIX}"
+        "-DGNUPLOT=${PROJECT10_GNUPLOT}" "-DMODE=${mode}"
+        "-DSAMPLE_CONFIG=${CMAKE_CURRENT_SOURCE_DIR}/configs/run_0000/config.json"
+        "-DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/test-work"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/reuse.cmake"
+    )
+  endforeach()
+  set_tests_properties(reuse_render PROPERTIES SKIP_REGULAR_EXPRESSION "SKIP: gnuplot")
+  set_tests_properties(reuse_links PROPERTIES SKIP_REGULAR_EXPRESSION "SKIP: symbolic links")
   foreach(mode contract render)
     add_test(NAME batch_${mode}
       COMMAND "${CMAKE_COMMAND}"
