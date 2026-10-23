@@ -1,6 +1,7 @@
 #pragma once
 
 #include "project10/evaluation/mse.hpp"
+#include "project10/io/run_lock.hpp"
 
 #include <iosfwd>
 #include <string>
@@ -15,7 +16,9 @@ struct MseSeries {
   std::vector<MseResult> points;
 };
 
+// borrowedLock指定時は対象runとの一致を検査し、取得・解放は呼び出し側に任せる。
 void plotRun(int runID, bool png, const std::string& name,
-             const std::string& gnuplot, std::ostream& log);
+             const std::string& gnuplot, std::ostream& log,
+             const io::RunLock* borrowedLock = nullptr);
 
 }  // namespace project10::evaluation

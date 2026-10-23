@@ -1,4 +1,5 @@
 #include "project10/evaluation/run.hpp"
+#include "project10/evaluation/plot.hpp"
 #include "project10/simulation/run.hpp"
 
 #include <nlohmann/json.hpp>
@@ -65,6 +66,21 @@ void testServices(const std::string& sampleConfig) {
     original.emplace(entry.path().filename().string(), read(entry.path()));
   }
   require(original.size() == 5);
+  {
+    const project10::io::RunLock borrowed(lock);
+    require(!project10::simulation::generateRun(0, {}, &borrowed));
+    require(fs::is_directory(lock));
+    rejects([] { project10::simulation::generateRun(0); }, "このrunはすでに使用中です");
+  }
+  {
+    const project10::io::RunLock wrong("runs/.run_0001.lock");
+    rejects([&] { project10::simulation::generateRun(0, {}, &wrong); }, "対象runのロック");
+    rejects([&] { project10::evaluation::evaluateRun(0, "Elo", &wrong); }, "対象runのロック");
+    rejects([&] {
+      project10::evaluation::plotRun(0, false, "graphs", "unused", std::cout, &wrong);
+    }, "対象runのロック");
+  }
+  require(!fs::exists(lock) && !fs::exists("runs/.run_0001.lock"));
   write(dir / "keep.txt", "unrelated result");
   config["num_players"] = 4;
   write("configs/run_0000/config.json", config.dump(2));

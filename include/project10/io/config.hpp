@@ -44,6 +44,9 @@ struct RatingConfig {
 };
 
 RatingConfig loadTrueSkillConfig(int runID);
+// rootをconfigsにすると、生成前に同じ検証を適用できる。
+RatingConfig loadRatingConfig(int runID, const std::string& algorithm,
+                              const std::filesystem::path& root = "runs");
 
 // Glicko（初代）の実行設定。初期値とc（rd_growth）は設定のglicko項目から読む。
 struct GlickoConfig {
@@ -53,10 +56,11 @@ struct GlickoConfig {
   double rdGrowth;
 };
 
-GlickoConfig loadGlickoConfig(int runID);
+GlickoConfig loadGlickoConfig(int runID, const std::filesystem::path& root = "runs");
 
 // configs/ではなく、生成結果に保存した設定を読む。
-EvaluationConfig loadEvaluationConfig(int runID, const std::string& algorithm);
+EvaluationConfig loadEvaluationConfig(int runID, const std::string& algorithm,
+                                      const std::filesystem::path& root = "runs");
 
 struct PlotConfig {
   int runID;
@@ -66,7 +70,7 @@ struct PlotConfig {
 };
 
 // 描画には正解情報や予測CSVを必要としない。
-PlotConfig loadPlotConfig(int runID);
+PlotConfig loadPlotConfig(int runID, const std::filesystem::path& root = "runs");
 
 std::string runDirectoryName(int runID);
 SimulationConfig loadConfig(int runID);
