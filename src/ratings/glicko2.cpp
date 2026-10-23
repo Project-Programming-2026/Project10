@@ -16,7 +16,7 @@ static fs::path input_file_players = "players.csv";
 static fs::path input_file_matches = "matches.csv";
 static const double tau = 0.5; //ボラティリティの変動しやすさ
 static const double epsilon = 0.000001; //小さい定数
-static const double pi = 3.141592653589793; //円周率
+static const double pi = atan(1) * 4;
 
 class Player;
 
@@ -97,14 +97,14 @@ void Player::update(){
     vector<double> opponents_mu(past_result.size());
     vector<double> opponents_phi(past_result.size());
     vector<double> Evec(past_result.size());
-    for(int i=0;i<past_result.size();i++){
+    for(int i=0;i<(int)past_result.size();i++){
         opponents_mu.at(i) = scale_rate(opponents_r.at(i));
         opponents_phi.at(i) = scale_rd(opponents_rd.at(i));
         Evec.at(i) = E(mu,opponents_mu.at(i),opponents_phi.at(i));
     }
     //vの計算
     double vinv = 0;
-    for(int i=0;i<past_result.size();i++){
+    for(int i=0;i<(int)past_result.size();i++){
         vinv += pow(g(opponents_phi.at(i)),2) * Evec.at(i) * (1 - Evec.at(i));
     }
     if(!std::isfinite(vinv) || vinv <= 0){ //極端なvinvによるデータの破壊検知
@@ -114,7 +114,7 @@ void Player::update(){
     double v = 1 / vinv;
     //deltaの計算
     double delta = 0;
-    for(int i=0;i<past_result.size();i++){
+    for(int i=0;i<(int)past_result.size();i++){
         delta += v * g(opponents_phi.at(i)) * (past_result.at(i) - Evec.at(i));
     }
     //新しいsigmaの計算
@@ -171,7 +171,7 @@ double predict(int i, int j){
 void output(int run_id, int period, fs::path file_path){
     ofstream out(file_path / output_file,ios::app);
     sort(exist_player.begin(),exist_player.end());
-    for(int i=0; i<exist_player.size(); i++) for(int j=i+1; j<exist_player.size();j++){
+    for(int i=0; i<(int)exist_player.size(); i++) for(int j=i+1; j<(int)exist_player.size();j++){
         int a = exist_player.at(i);
         int b = exist_player.at(j);
         out << run_id << "," << period*10 + 10 << "," << a << "," << b << "," << predict(a,b) << endl;
