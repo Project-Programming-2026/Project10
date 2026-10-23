@@ -113,10 +113,9 @@ std::string runDirectoryName(int runID) {
 }
 
 // JSON読み込みの参考資料と採用範囲はdocs/references.mdを参照。
-SimulationConfig loadConfig(int runID) {
+SimulationConfig loadConfig(int runID, const std::filesystem::path& root) {
   // 1. 対象の設定を読み込み、元のJSON全文を保持したまま解析する。
-  const auto configPath = std::filesystem::path("configs") /
-    runDirectoryName(runID) / "config.json";
+  const auto configPath = root / runDirectoryName(runID) / "config.json";
   SimulationConfig settings{};
   settings.sourceText = readConfigText(configPath);
   const auto config = parseConfig(settings.sourceText);
@@ -170,6 +169,20 @@ SimulationConfig loadConfig(int runID) {
   }
 
   return settings;
+}
+
+void validateRunSnapshot(int runID) {
+  const auto run = std::filesystem::path("runs") / runDirectoryName(runID);
+  const auto marker = parseConfig(readConfigText(run / "project10_run.json"));
+  if (readInteger(marker, "schema_version", 1) != 1 ||
+      marker.at("producer") != "project10_run" || readInteger(marker, "run_id", 0) != runID) {
+    throw std::runtime_error("runの識別マーカーが一致しません。");
+  }
+  const auto current = loadConfig(runID);
+  const auto saved = loadConfig(runID, "runs");
+  if (parseConfig(current.sourceText) != parseConfig(saved.sourceText)) {
+    throw std::runtime_error("保存済み設定と現在の設定が一致しません。");
+  }
 }
 
 RatingConfig loadTrueSkillConfig(int runID) {

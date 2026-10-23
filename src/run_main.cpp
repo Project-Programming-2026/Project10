@@ -1,5 +1,6 @@
 #include "project10/evaluation/plot.hpp"
 #include "project10/evaluation/run.hpp"
+#include "project10/evaluation/reuse.hpp"
 #include "project10/io/config.hpp"
 #include "project10/io/process.hpp"
 #include "project10/simulation/run.hpp"
@@ -46,15 +47,17 @@ std::string sibling(const char* argv0, const std::string& name) {
 int main(int argc, char** argv) {
   std::string stage = "設定確認";
   try {
-    bool png = false;
-    std::string gnuplot = "gnuplot";
+    bool png = false, reuse = false;
+    std::string gnuplot = "gnuplot", name = "graphs";
     for (int i = 1; i < argc; ++i) {
       const std::string option = argv[i];
       if (option == "--png") png = true;
+      else if (option == "--reuse-existing") reuse = true;
       else if (option == "--gnuplot" && i + 1 < argc) gnuplot = argv[++i];
+      else if (option == "--name" && i + 1 < argc) name = argv[++i];
       else if (option == "--help") {
-        std::cout << "project10_run [--png] [--gnuplot executable]\n"
-                     "run IDを標準入力から読み、4手法とMSE・グラフを実行します。新規run専用です。\n";
+        std::cout << "project10_run [--reuse-existing] [--png] [--name graphs] [--gnuplot executable]\n"
+                     "run IDを標準入力から読み、4手法とMSE・グラフを実行します。\n";
         return 0;
       } else throw std::invalid_argument("不正なオプションです: " + option);
     }
@@ -66,7 +69,9 @@ int main(int argc, char** argv) {
     if (!(parser >> runID) || runID < 0 || !(parser >> std::ws).eof())
       throw std::invalid_argument("run IDが不正です。");
     const auto run = fs::absolute(fs::path("runs") / io::runDirectoryName(runID));
-    if (fs::exists(fs::symlink_status(run))) throw std::runtime_error("既存runは使用しません。");
+    if (!reuse && fs::exists(fs::symlink_status(run))) throw std::runtime_error("既存runは使用しません。");
+    if (reuse && (fs::is_symlink(run) || !fs::is_directory(run)))
+      throw std::runtime_error("再利用には既存の通常runが必要です。");
     io::loadConfig(runID);
     for (const auto& method : methods) {
       const auto config = io::loadRatingConfig(runID, method, "configs");
@@ -79,14 +84,23 @@ int main(int argc, char** argv) {
     fs::create_directories("runs");
     const auto lockPath = run.parent_path() / ("." + run.filename().string() + ".lock");
     const io::RunLock lock(lockPath);
-    stage = "生成";
-    std::cout << stage << '\n' << std::flush;
-    if (!project10::simulation::generateRun(runID, {}, &lock))
-      throw std::runtime_error("既存runは使用しません。");
+    project10::evaluation::ReusePlan plan;
+    if (reuse) {
+      stage = "再利用検証";
+      plan = project10::evaluation::inspectReusableRun(runID, lock);
+      std::cout << "再利用: 生成済み共通入力\n";
+    } else {
+      stage = "生成";
+      std::cout << stage << '\n' << std::flush;
+      if (!project10::simulation::generateRun(runID, {}, &lock))
+        throw std::runtime_error("既存runは使用しません。");
+    }
     const Workspace workspace(lockPath / "predictions");
-    writeText(workspace.path / "marker.json", "{\"schema_version\":1,\"producer\":\"project10_run\",\"run_id\":" +
-      std::to_string(runID) + "}\n");
-    fs::create_hard_link(workspace.path / "marker.json", run / "project10_run.json");
+    if (!reuse) {
+      writeText(workspace.path / "marker.json", "{\"schema_version\":1,\"producer\":\"project10_run\",\"run_id\":" +
+        std::to_string(runID) + "}\n");
+      fs::create_hard_link(workspace.path / "marker.json", run / "project10_run.json");
+    }
     const auto workerRun = workspace.path / "runs" / run.filename();
     fs::create_directories(workerRun);
     // 推定器の作業先には正解情報を置かず、共有入力を一度だけ複製する。
@@ -95,16 +109,24 @@ int main(int argc, char** argv) {
     const auto stdinPath = workspace.path / "stdin.txt";
     writeText(stdinPath, std::to_string(runID) + "\n");
     for (const auto& method : methods) {
-      stage = method + "予測";
-      std::cout << stage << '\n' << std::flush;
-      const bool direct = method == "Elo" || method == "Glicko2";
-      const auto program = sibling(argv[0], direct ? "project10_predict" :
-        (method == "Glicko" ? "project10_glicko" : "project10_trueskill"));
-      io::runProcess(program, direct ? std::vector<std::string>{std::to_string(runID), method} :
-        std::vector<std::string>{}, workspace.path, stdinPath);
-      const auto config = io::loadEvaluationConfig(runID, method);
-      fs::create_hard_link(workerRun / config.predictionsFile, run / config.predictionsFile);
-      fs::remove(workerRun / config.predictionsFile);
+      if (plan.predictions.count(method)) {
+        std::cout << "再利用: " << method << "予測\n";
+      } else {
+        stage = method + "予測";
+        std::cout << stage << '\n' << std::flush;
+        const bool direct = method == "Elo" || method == "Glicko2";
+        const auto program = sibling(argv[0], direct ? "project10_predict" :
+          (method == "Glicko" ? "project10_glicko" : "project10_trueskill"));
+        io::runProcess(program, direct ? std::vector<std::string>{std::to_string(runID), method} :
+          std::vector<std::string>{}, workspace.path, stdinPath);
+        const auto config = io::loadEvaluationConfig(runID, method);
+        fs::create_hard_link(workerRun / config.predictionsFile, run / config.predictionsFile);
+        fs::remove(workerRun / config.predictionsFile);
+      }
+      if (plan.mse.count(method)) {
+        std::cout << "再利用: " << method << " MSE\n";
+        continue;
+      }
       stage = method + " MSE評価";
       std::cout << stage << '\n' << std::flush;
       const auto result = project10::evaluation::evaluateRun(runID, method, &lock);
@@ -113,7 +135,7 @@ int main(int argc, char** argv) {
     }
     stage = "グラフ生成";
     std::cout << stage << '\n' << std::flush;
-    project10::evaluation::plotRun(runID, png, "graphs", gnuplot, std::cout, &lock);
+    project10::evaluation::plotRun(runID, png, name, gnuplot, std::cout, &lock, reuse);
     std::cout << "一括実行完了: " << run.string() << '\n';
   } catch (const std::exception& error) {
     std::cerr << "エラー（" << stage << "）: " << error.what() << '\n';

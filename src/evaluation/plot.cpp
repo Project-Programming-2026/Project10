@@ -10,6 +10,7 @@
 #include <limits>
 #include <locale>
 #include <memory>
+#include <sstream>
 #include <stdexcept>
 
 namespace project10::evaluation {
@@ -27,9 +28,8 @@ void runGnuplot(const std::string& program, const fs::path& directory) {
   }
 }
 
-void writeScript(const fs::path& path, int runID, int maximum,
-                 const std::vector<MseSeries>& series, bool png) {
-  std::ofstream script(path);
+std::string makeScript(int runID, int maximum, const std::vector<MseSeries>& series, bool png) {
+  std::ostringstream script;
   script.imbue(std::locale::classic());
   script << std::setprecision(std::numeric_limits<double>::max_digits10);
   script << "# project10_plot: single run; validated MSE values; no aggregation\n";
@@ -62,8 +62,7 @@ void writeScript(const fs::path& path, int runID, int maximum,
     script << "set terminal pngcairo size 1000,650 noenhanced\nset output 'mse.png'\n"
            << "replot\nunset output\n";
   }
-  script.close();
-  if (!script) throw std::runtime_error("描画スクリプトの保存に失敗しました。");
+  return script.str();
 }
 
 void validateImage(const fs::path& path, bool png) {
@@ -81,7 +80,8 @@ void validateImage(const fs::path& path, bool png) {
 }  // namespace
 
 void plotRun(int runID, bool png, const std::string& name,
-             const std::string& gnuplot, std::ostream& log, const io::RunLock* borrowedLock) {
+             const std::string& gnuplot, std::ostream& log, const io::RunLock* borrowedLock,
+             bool reuseExisting) {
   if (name.empty() || name.find_first_not_of(
       "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-") != std::string::npos) {
     throw std::invalid_argument("出力名は英数字・ハイフン・アンダースコアで指定してください。");
@@ -116,12 +116,36 @@ void plotRun(int runID, bool png, const std::string& name,
   }
   if (series.empty()) throw std::runtime_error("描画できるMSEファイルがありません。");
   const auto output = run / name;
+  if (reuseExisting && fs::exists(fs::symlink_status(output))) {
+    if (!fs::is_directory(fs::symlink_status(output)) ||
+        !fs::is_regular_file(fs::symlink_status(output / "plot.gp")))
+      throw std::runtime_error("既存グラフの保存先・描画スクリプトが不正です。--nameで別名を指定してください。");
+    const bool savedPng = fs::exists(fs::symlink_status(output / "mse.png"));
+    if (png && !savedPng)
+      throw std::runtime_error("既存グラフにPNGがありません。--nameで別名を指定してください。");
+    validateImage(output / "mse.svg", false);
+    if (savedPng) validateImage(output / "mse.png", true);
+    std::ifstream file(output / "plot.gp");
+    if (!file) throw std::runtime_error("既存の描画スクリプトを開けません。");
+    std::string actual, line;
+    while (std::getline(file, line)) {
+      if (!line.empty() && line.back() == '\r') line.pop_back();
+      actual += line + '\n';
+    }
+    if (!file.eof() || actual != makeScript(runID, config.matchesPerPlayer, series, savedPng))
+      throw std::runtime_error("既存グラフの描画データ・条件がMSEと一致しません。--nameで別名を指定してください。");
+    log << "再利用: グラフ " << output.string() << '\n';
+    return;
+  }
   // 新規ディレクトリの作成を予約とし、既存のグラフ・ファイル・リンクを保護する。
   if (fs::exists(fs::symlink_status(output)) || !fs::create_directory(output)) {
     throw std::runtime_error("グラフ出力先がすでに存在します。--nameで別名を指定してください。");
   }
   try {
-    writeScript(output / "plot.gp", runID, config.matchesPerPlayer, series, png);
+    std::ofstream script(output / "plot.gp");
+    script << makeScript(runID, config.matchesPerPlayer, series, png);
+    script.close();
+    if (!script) throw std::runtime_error("描画スクリプトの保存に失敗しました。");
     runGnuplot(gnuplot, output);
     validateImage(output / "mse.svg", false);
     if (png) validateImage(output / "mse.png", true);

@@ -153,18 +153,43 @@ Integer integer(const std::string& cell) {
   return value;
 }
 
-double probability(const std::string& cell, const std::string& label = "勝率") {
+double finiteValue(const std::string& cell) {
   std::istringstream input(cell);
   input.imbue(std::locale::classic());
   double value;
   if (!(input >> value) || !(input >> std::ws).eof() ||
-      !std::isfinite(value) || value < 0.0 || value > 1.0) {
-    throw std::invalid_argument(label + "は0以上1以下の有限な値で指定してください: " + cell);
+      !std::isfinite(value)) {
+    throw std::invalid_argument("有限な数値で指定してください: " + cell);
   }
   return value;
 }
 
+double probability(const std::string& cell, const std::string& label = "勝率") {
+  try {
+    const double value = finiteValue(cell);
+    if (value < 0.0 || value > 1.0) throw std::invalid_argument("範囲外");
+    return value;
+  } catch (const std::invalid_argument&) {
+    throw std::invalid_argument(label + "は0以上1以下の有限な値で指定してください: " + cell);
+  }
+}
+
 }  // namespace
+
+std::vector<double> readLatentParametersCsv(const std::string& path, int numPlayers) {
+  if (numPlayers < 2) throw std::invalid_argument("プレイヤーは2人以上必要です。");
+  std::vector<double> values(numPlayers, std::numeric_limits<double>::quiet_NaN());
+  std::size_t count = 0;
+  readCsv(path, "player_id,theta_0", 2, [&](const auto& fields) {
+    const auto id = static_cast<std::size_t>(integer(fields[0]));
+    if (id >= values.size() || std::isfinite(values[id]))
+      throw std::invalid_argument("潜在能力のIDが不正か重複しています。");
+    values[id] = finiteValue(fields[1]);
+    ++count;
+  });
+  if (count != values.size()) throw std::runtime_error("潜在能力が不足しています: " + path);
+  return values;
+}
 
 void validatePlayersCsv(const std::string& path, int numPlayers) {
   if (numPlayers < 2) throw std::invalid_argument("プレイヤーは2人以上必要です。");
