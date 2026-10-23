@@ -73,7 +73,9 @@ struct PlotConfig {
 PlotConfig loadPlotConfig(int runID, const std::filesystem::path& root = "runs");
 
 std::string runDirectoryName(int runID);
-SimulationConfig loadConfig(int runID);
+SimulationConfig loadConfig(int runID, const std::filesystem::path& root = "configs");
+// 作成元マーカーと、現在の設定・保存済み設定の意味上の一致を検査する。
+void validateRunSnapshot(int runID);
 void writeConfigSnapshot(
   const SimulationConfig& config,
   const std::filesystem::path& outputDir
