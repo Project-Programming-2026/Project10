@@ -9,3 +9,9 @@
 | [JSON設定読み込み](../src/io/config.cpp) | [nlohmann/jsonに関するQiita記事](https://qiita.com/yohm/items/0f389ba5c5de4e2df9cf) | `json::parse`・`at`・`get` の使い方を参考にした。型・値・重複キーの検証と、読み込んだJSON全文の保存を追加している |
 
 同梱ライブラリの版・配布元・ライセンスは[third_party/README.md](../third_party/README.md)、研究条件は[READMEの参照資料](../README.md#参照資料)、共有サンプルの来歴は[run_0000の生成来歴](samples/run_0000-provenance.md)を参照してください。
+
+## TrueSkill
+
+- 原典・版：[Herbrich, Minka, Graepel, *TrueSkill: A Bayesian Skill Rating System*, NIPS 2006版](https://www.microsoft.com/en-us/research/wp-content/uploads/2007/01/NIPS2006_0688.pdf)。§2–3・Table 1のモデルとモーメント整合を1対1・引き分けなしに適用し、初期値と定数は§4.2の尺度を採用する。
+- 数値計算：[NIST DLMF §7.9、式7.9.1](https://dlmf.nist.gov/7.9.E1)（Version 1.2.8、2026-09-15）。相補誤差関数の連分数を標準正規分布の裾へ変換して使う。
+- [採用した式・定数・近似・独立検証](trueskill.md)に、原典の仕様と本実装で選んだ数値計算上の条件を記録する。

@@ -26,14 +26,14 @@
 
 ## 扱うレーティングアルゴリズム
 
-第7回会議に記載された初期比較の対象は次の4手法です。すべて本リポジトリでは未実装です。具体的な数式の参照先、初期値、ハイパーパラメータ、予測勝率への変換方法は、各実装とともに明記します。
+第7回会議に記載された初期比較の対象は次の4手法です。実装した数式と定数の根拠は[参考資料](docs/references.md)に記録します。
 
 | 手法 | 比較での位置付け | 状態 |
 | --- | --- | --- |
 | Elo | 既存手法の比較対象 | 実装済み |
 | Glicko（初代） | Glicko-2と区別して比較 | 未実装 |
-| Glicko-2 | Glickoと区別して比較 | 未実装 |
-| TrueSkill | 初期実験では1対1・引き分けなしに限定 | 未実装 |
+| Glicko-2 | Glickoと区別して比較 | 試作ソースあり・共通run未接続 |
+| TrueSkill | 初期実験では1対1・引き分けなしに限定 | 更新・予測CSV出力を実装 |
 
 独自の提案手法v0は、既存手法の初期比較を踏まえて検討する予定です。仕様と担当は未確定で、既存手法より優れるという結果もまだありません。多次元能力、相性、実力の時間変化、マッチング方式の比較は拡張候補です。
 
@@ -62,7 +62,7 @@ $$
 p_{ij}=\Phi\left(\frac{\theta_i-\theta_j}{\sqrt{2}\sigma_g}\right)
 $$
 
-処理は次の順序で構成する計画です。現在は手順1の生成、手順4のMSE計算、手順5の手法別CSV出力・グラフ生成を実装しています。手順2・3のレーティング・予測は未実装です。
+処理は次の順序です。TrueSkillでは手順1〜5を接続できます。他の3手法の共通runへの接続は未実装です。
 
 1. 仮想プレイヤーと正解の勝率を生成し、共通の対戦履歴を作る。
 2. 各手法にプレイヤーIDと観測済みの対戦履歴を渡す。潜在能力と正解の勝率は渡さない。
@@ -100,6 +100,7 @@ $$
 │   ├── run_0000/                  従来のID・潜在能力・設定・ハッシュ
 │   └── run_0001/                  共通のID・対戦履歴・設定・ハッシュ・来歴
 ├── include/project10/
+│   ├── ratings/trueskill.hpp      TrueSkillの状態・更新・予測API
 │   ├── io/
 │   │   ├── config.hpp             設定読み込みの公開ヘッダー
 │   │   ├── csv.hpp                CSV入出力の公開ヘッダー
@@ -116,6 +117,8 @@ $$
 │       ├── probit.hpp             真の勝率計算の公開ヘッダー
 │       └── matches.hpp            対戦履歴生成とMatch型の公開ヘッダー
 ├── src/
+│   ├── trueskill_main.cpp         1試行のTrueSkill予測の入口
+│   ├── ratings/trueskill.cpp      TrueSkillの更新・予測
 │   ├── main.cpp                   生成CLIの対話・結果表示・終了コード
 │   ├── evaluate_main.cpp          評価CLIの対話・結果表示・終了コード
 │   ├── evaluation/
@@ -137,6 +140,8 @@ $$
 │       ├── probit.cpp             プロビットモデルによる真の勝率計算
 │       └── matches.cpp            ラウンドごとのペア分け・勝敗生成
 ├── tests/
+│   ├── trueskill_tests.cpp        数値積分・CSV・評価時点の検証
+│   ├── trueskill.cmake            生成→TrueSkill→MSEの結合確認
 │   ├── run_services_tests.cpp     非対話呼び出し・上書き保護・ロックの確認
 │   ├── plot_tests.cpp             MSE描画入力の正常系・異常系
 │   ├── plot.cmake                 描画CLIとSVG・PNGの結合確認
@@ -253,7 +258,7 @@ mkdir configs/run_0001 && cp configs/run_0000/config.json configs/run_0001/confi
 
 Visual StudioのDebugビルドでは `.\build\vs\Debug\project10.exe` を実行します。入力は0以上の `int` の範囲の整数で、`0.5` や `0 abc` は拒否します。IDは最低4桁にゼロ埋めされ、`0` は `configs/run_0000/config.json`、`12345` は `configs/run_12345/config.json` に対応します。コマンドライン引数による設定指定や複数試行の一括実行はありません。
 
-[configs/run_0000/config.json](configs/run_0000/config.json)は既存の設定例です。掲載されている3種類のシードは議事録由来の説明用の値であり、正式な実験シードとして確定したことを意味しません。小規模な確認には、この設定を新しい `configs/run_XXXX/config.json` へコピーして、`run_id` と `num_players`（例：8人）を変更します。さらに短い確認には `matches_per_player` を5、`rating_period_matches_per_player` を2にできます。他の条件とCSV名は維持してください。
+[configs/run_0000/config.json](configs/run_0000/config.json)は既存の設定例です。掲載されている3種類のシードは議事録由来の説明用の値であり、正式な実験シードとして確定したことを意味しません。小規模な確認には、この設定を新しい `configs/run_XXXX/config.json` へコピーして、`run_id` と `num_players`（例：8人）を変更します。さらに短い確認には `matches_per_player` を5、`rating_period_matches_per_player` を2にできます。TrueSkill・MSEまで実行する場合は `evaluation_interval_matches_per_player` も2など総対戦数以下へ変更します。他の条件とCSV名は維持してください。
 
 | 設定 | 現在の扱い |
 | --- | --- |
@@ -315,9 +320,25 @@ JSONの未使用項目もスナップショットに残します。潜在能力�
 
 試合総数は `num_players * matches_per_player / 2` です。初期条件では1,000人・200ラウンドで100,000試合、10ラウンド1期間で `period_id` は0〜19です。末尾の端数ラウンドは切り捨てず短い最終期間へ含めます。例えば5ラウンド・2ラウンド1期間なら2＋2＋1ラウンドの3期間、期間ラウンド数が総ラウンド数より大きければ全体で1つの短い期間です。この端数の扱いも実装案としてチームで確認してください。Glicko・Glicko-2の更新処理を決定・実装したことは意味しません。
 
+### TrueSkillの更新・予測
+
+生成済みrunに対して次を実行し、run IDを入力します。Windowsでは `.\build\dev\project10_trueskill.exe` を使います。
+
+```sh
+./build/dev/project10_trueskill
+```
+
+`runs/run_XXXX/config.json`、`players.csv`、`matches.csv` を読み、同じrunへ `trueskill.csv` を出力します。保存済み設定を使うため、現在の `configs/`、潜在能力、正解勝率は読みません。既存予測は上書きせず、入力検証と一時保存を終えてから公開します。
+
+試合を行順に毎試合更新し、設定の `evaluation_interval_matches_per_player` ごとに全 `player_a < player_b` の予測を保存します。評価時点で各人の対戦数が揃わない履歴は拒否します。評価間隔と `rating_period_matches_per_player` は独立です。例えば各人5試合・評価間隔2・期間幅3なら2・4試合時点を出力し、最後の1試合も検証・更新します。初期時点と端数時点は共通評価に合わせて出力しません。
+
+原版TrueSkillを1対1・引き分けなしに限定し、`mu0=25, sigma0=25/3, beta=25/6, tau=25/300` を採用しています。[原典・更新式・定数・裾の近似と独立検証](docs/trueskill.md)を参照してください。正式比較のパラメータはチームで確認します。
+
+生成からグラフまでは `project10` → `project10_trueskill` → `project10_evaluate` → `project10_plot` の順に、各CLIへ同じrun IDを入力します。評価CLIでは続けて手法名 `TrueSkill` を入力します。
+
 ### 予測CSVのMSE評価
 
-生成済みの `runs/run_XXXX/` に、保存済みの `config.json`、`players.csv`、`ground_truth.csv` と、評価する1手法の予測CSVを用意します。`configs/` の現在の設定は読みません。予測CSVは各手法が同じ履歴から出力するもので、レーティング・予測処理自体はまだ未実装です。
+生成済みの `runs/run_XXXX/` に、保存済みの `config.json`、`players.csv`、`ground_truth.csv` と、評価する1手法の予測CSVを用意します。`configs/` の現在の設定は読みません。TrueSkillの予測CSVは前節のCLIで生成できます。
 
 Ninjaでビルドした場合、リポジトリ直下で次を実行します。Windowsでは `.\build\dev\project10_evaluate.exe` を使用します。
 
@@ -395,7 +416,7 @@ runs/run_XXXX/graphs/
 
 従来のデータも保全し、[共有データの説明](samples/README.md)に沿って `samples/run_0000/` に既存の生成済みデータのコピーを用意しています。プレイヤーIDと潜在能力のCSV、使用した設定、SHA-256をGit管理対象としています。1,000人分のCSVは合計約30KBです。`.gitattributes` で共有CSV・設定の改行変換を抑止し、OSが異なってもハッシュで同一性を確認できるようにしています。
 
-`samples/run_0000/` に含まれるのは、プレイヤーID・潜在能力のCSV、使用した設定とチェックサムです。対戦履歴を含む共通入力は `samples/run_0001/` にあり、同じ `players.csv`・`matches.csv` と行順を利用します。`ground_truth.csv` は生成器の出力に含まれますが、どちらの共有サンプルにも含まれません。サンプルの更新は別途来歴・ハッシュとともに管理します。レーティング手法へ渡すのは、プレイヤーIDと観測した対戦履歴です。潜在能力と真の勝率は生成・評価・検証専用です。レーティングの実行自体は未実装です。
+`samples/run_0000/` に含まれるのは、プレイヤーID・潜在能力のCSV、使用した設定とチェックサムです。対戦履歴を含む共通入力は `samples/run_0001/` にあり、同じ `players.csv`・`matches.csv` と行順を利用します。`ground_truth.csv` は生成器の出力に含まれますが、どちらの共有サンプルにも含まれません。サンプルの更新は別途来歴・ハッシュとともに管理します。レーティング手法へ渡すのは、プレイヤーIDと観測した対戦履歴です。潜在能力と真の勝率は生成・評価・検証専用です。TrueSkillは前述の専用CLIで実行できます。
 
 各自の実行結果は `runs/` へ保存し、共有入力のコピーを上書きしません。正式な比較では、使用する共通データを設定・ハッシュとともに固定します。Gitで扱える大きさならデータも管理し、大きい場合はチームの共有ストレージ等へ置いて、取得先・版・ハッシュをリポジトリに記録します。
 
@@ -403,7 +424,7 @@ runs/run_XXXX/graphs/
 
 1. 前述の環境構築・実行手順に従い、新しいrun IDの設定を用意します。初期条件なら `num_players=1000`、`matches_per_player=200`、`rating_period_matches_per_player=10` とし、3種類のシード・生成モデル・環境を記録します。既存の正式な結果は上書きしません。
 2. ビルドした `project10` またはWindowsのbatを起動し、そのrun IDを入力します。生成された `runs/run_XXXX/` の設定と4つのCSVを1試行のデータ一式として保管します。
-3. 全手法に渡すのは、同じ一式から取得した `players.csv` と `matches.csv` だけです。行順を変更せず、`latent_parameters.csv` と `ground_truth.csv` は生成・評価担当側で保管します。各レーティング手法はまだ未実装で、ここでは入力の受け渡し方法を示しています。
+3. 全手法に渡すのは、同じ一式から取得した `players.csv` と `matches.csv` だけです。行順を変更せず、`latent_parameters.csv` と `ground_truth.csv` は生成・評価担当側で保管します。TrueSkillはこの共通入力から予測CSVを出力できます。
 4. `config.json`・4つのCSVのSHA-256、コードのコミットIDと未コミット差分、生成コマンド・環境を記録し、既存データを置換しない新しい共有先へ配置します。各担当は共有先から同じ版を取得し、ハッシュを照合します。再生成は同じ環境でもコード・設定が揃っている必要があり、標準ライブラリの異なる環境では同じ乱数列を保証しません。
 
 PowerShellでは、生成後に次のようにハッシュを表示できます。ここでは新規に用意したrun IDを `0001` としています。
