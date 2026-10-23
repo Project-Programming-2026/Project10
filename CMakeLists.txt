@@ -21,6 +21,9 @@ add_library(project10_core
   src/simulation/probit.cpp
   src/simulation/matches.cpp
   src/ratings/glicko2.cpp
+  src/simulation/run.cpp
+  src/evaluation/MSE.cpp
+  src/evaluation/run.cpp
 )
 target_include_directories(project10_core PUBLIC
   "${CMAKE_CURRENT_SOURCE_DIR}/include"
@@ -34,12 +37,71 @@ endif()
 
 add_executable(project10 src/main.cpp)
 target_link_libraries(project10 PRIVATE project10_core)
+add_executable(project10_evaluate src/evaluate_main.cpp)
+target_link_libraries(project10_evaluate PRIVATE project10_core)
+add_library(project10_plotting src/evaluation/plot.cpp)
+target_link_libraries(project10_plotting PUBLIC project10_core)
+add_executable(project10_plot src/plot_main.cpp)
+target_link_libraries(project10_plot PRIVATE project10_plotting)
 if(MSVC)
   target_compile_options(project10 PRIVATE /utf-8)
+  target_compile_options(project10_evaluate PRIVATE /utf-8)
+  target_compile_options(project10_plotting PRIVATE /W4 /utf-8)
+  target_compile_options(project10_plot PRIVATE /utf-8)
+else()
+  target_compile_options(project10_plotting PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
 include(CTest)
 if(BUILD_TESTING)
+  add_executable(run_services_tests tests/run_services_tests.cpp)
+  target_link_libraries(run_services_tests PRIVATE project10_core nlohmann_json::nlohmann_json)
+  if(MSVC)
+    target_compile_options(run_services_tests PRIVATE /utf-8)
+  endif()
+  add_test(NAME run_services COMMAND run_services_tests
+    "${CMAKE_CURRENT_BINARY_DIR}/test-work"
+    "${CMAKE_CURRENT_SOURCE_DIR}/configs/run_0000/config.json"
+  )
+  add_executable(plot_tests tests/plot_tests.cpp)
+  target_link_libraries(plot_tests PRIVATE project10_core)
+  add_executable(plot_renderer_stub tests/plot_renderer_stub.cpp)
+  if(MSVC)
+    target_compile_options(plot_tests PRIVATE /utf-8)
+    target_compile_options(plot_renderer_stub PRIVATE /utf-8)
+  endif()
+  add_test(NAME plot_csv_unit COMMAND plot_tests "${CMAKE_CURRENT_BINARY_DIR}/test-work/plot-csv")
+  # 描画プログラムは実行時だけ必要。構成時の取得・必須化は行わない。
+  find_program(PROJECT10_GNUPLOT NAMES gnuplot gnuplot-nox)
+  foreach(mode IN ITEMS contract render)
+    if(mode STREQUAL "contract")
+      set(plot_backend "$<TARGET_FILE:plot_renderer_stub>")
+    else()
+      set(plot_backend "${PROJECT10_GNUPLOT}")
+    endif()
+    add_test(NAME plot_${mode}
+      COMMAND "${CMAKE_COMMAND}"
+        "-DPROGRAM=$<TARGET_FILE:project10_plot>"
+        "-DGNUPLOT=${plot_backend}"
+        "-DSAMPLE_CONFIG=${CMAKE_CURRENT_SOURCE_DIR}/configs/run_0000/config.json"
+        "-DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/test-work"
+        "-DMODE=${mode}" -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/plot.cmake"
+    )
+  endforeach()
+  set_tests_properties(plot_render PROPERTIES SKIP_REGULAR_EXPRESSION "SKIP: gnuplot")
+  add_executable(evaluation_tests tests/evaluation_tests.cpp)
+  target_link_libraries(evaluation_tests PRIVATE project10_core)
+  if(MSVC)
+    target_compile_options(evaluation_tests PRIVATE /utf-8)
+  endif()
+  add_test(NAME evaluation_unit COMMAND evaluation_tests "${CMAKE_CURRENT_BINARY_DIR}/test-work")
+  add_test(NAME cli_evaluation
+    COMMAND "${CMAKE_COMMAND}"
+      "-DPROGRAM=$<TARGET_FILE:project10_evaluate>"
+      "-DSAMPLE_CONFIG=${CMAKE_CURRENT_SOURCE_DIR}/configs/run_0000/config.json"
+      "-DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/test-work"
+      -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/evaluation.cmake"
+  )
   add_executable(simulation_tests tests/simulation_tests.cpp)
   target_link_libraries(simulation_tests PRIVATE project10_core)
   if(MSVC)
