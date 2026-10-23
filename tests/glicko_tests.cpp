@@ -8,9 +8,12 @@
 #include <cmath>
 #include <cstddef>
 #include <initializer_list>
+#include <iomanip>
 #include <iostream>
 #include <limits>
+#include <sstream>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 namespace {
@@ -228,6 +231,71 @@ void testInvalidInputs() {
   rejects([infinity] { calculateGlickoWinProbability({1500.0, 350.0}, {infinity, 350.0}); });
 }
 
+void testWritePredictions() {
+  // 生成器と同じ形式：4人・各4試合・1期間2試合。評価間隔2なので評価時点は2と4。
+  const auto matches = generateMatches({0.0, 0.5, 1.0, 1.5}, 4, 2, 1.0, 3, 4);
+  std::ostringstream output;
+  writeGlickoPredictions(output, 7, 4, 2, matches, 1500.0, 350.0, 20.0);
+
+  // 期待値：期間ごとにupdateGlickoPeriodを適用し、各期間の終了時の状態から予測する。
+  std::vector<std::string> expected = {
+    "run_id,matches_per_player,player_a,player_b,predicted_p_a_wins"
+  };
+  auto states = initializeGlickoStates(4, 1500.0, 350.0);
+  for (int periodID = 0; periodID < 2; periodID++) {
+    std::vector<Match> period;
+    for (const Match& match : matches) {
+      if (match.periodID == periodID) {
+        period.push_back(match);
+      }
+    }
+    states = updateGlickoPeriod(states, period, 350.0, 20.0);
+    for (int a = 0; a < 4; a++) {
+      for (int b = a + 1; b < 4; b++) {
+        std::ostringstream row;
+        row << std::setprecision(std::numeric_limits<double>::max_digits10) << "7,"
+            << (periodID + 1) * 2 << ',' << a << ',' << b << ','
+            << calculateGlickoWinProbability(states[a], states[b]);
+        expected.push_back(row.str());
+      }
+    }
+  }
+  std::istringstream lines(output.str());
+  std::string line;
+  std::size_t index = 0;
+  while (std::getline(lines, line)) {
+    require(index < expected.size() && line == expected[index], "Incorrect prediction CSV row");
+    index++;
+  }
+  require(index == expected.size(), "Prediction CSV has missing rows");
+
+  // 1期間1試合・評価間隔2では、評価時点2・4の期間の終了時だけ書き、1・3では書かない。
+  const auto oneMatchPeriods = generateMatches({0.0, 0.5, 1.0, 1.5}, 4, 1, 1.0, 3, 4);
+  std::ostringstream sparse;
+  writeGlickoPredictions(sparse, 7, 4, 2, oneMatchPeriods, 1500.0, 350.0, 20.0);
+  std::istringstream sparseLines(sparse.str());
+  std::getline(sparseLines, line);  // ヘッダー
+  std::size_t rows = 0;
+  while (std::getline(sparseLines, line)) {
+    const auto first = line.find(',');
+    const auto point = line.substr(first + 1, line.find(',', first + 1) - first - 1);
+    require(point == "2" || point == "4", "Predictions must be written only at evaluation points");
+    rows++;
+  }
+  require(rows == 12, "Incorrect number of rows for one-match periods");
+
+  std::ostringstream ignored;
+  // 1期間2試合で評価間隔3だと、評価時点3が期間の途中に入る。
+  rejects([&] { writeGlickoPredictions(ignored, 7, 4, 3, matches, 1500.0, 350.0, 20.0); });
+  rejects([&] { writeGlickoPredictions(ignored, 7, 4, 0, matches, 1500.0, 350.0, 20.0); });
+  rejects([&] { writeGlickoPredictions(ignored, -1, 4, 2, matches, 1500.0, 350.0, 20.0); });
+  // 期間の終了時に各人の対戦数が揃わない履歴（0だけが2試合）。
+  rejects([&] {
+    writeGlickoPredictions(ignored, 7, 4, 2, {{0, 0, 0, 1, 1}, {1, 0, 0, 2, 0}},
+                           1500.0, 350.0, 20.0);
+  });
+}
+
 }  // namespace
 
 int main() {
@@ -239,6 +307,7 @@ int main() {
     testGeneratedHistory();
     testExtremeInputs();
     testInvalidInputs();
+    testWritePredictions();
     std::cout << "Glicko unit tests passed\n";
   } catch (const std::exception& error) {
     std::cerr << error.what() << '\n';

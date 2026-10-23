@@ -45,6 +45,16 @@ struct RatingConfig {
 
 RatingConfig loadTrueSkillConfig(int runID);
 
+// Glicko（初代）の実行設定。初期値とc（rd_growth）は設定のglicko項目から読む。
+struct GlickoConfig {
+  RatingConfig rating;
+  double initialRating;
+  double initialRD;
+  double rdGrowth;
+};
+
+GlickoConfig loadGlickoConfig(int runID);
+
 // configs/ではなく、生成結果に保存した設定を読む。
 EvaluationConfig loadEvaluationConfig(int runID, const std::string& algorithm);
 

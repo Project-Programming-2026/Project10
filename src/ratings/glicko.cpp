@@ -7,6 +7,9 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <iomanip>
+#include <limits>
+#include <locale>
 #include <stdexcept>
 
 namespace {
@@ -146,4 +149,61 @@ double calculateGlickoWinProbability(
   }
   // E = 1 / (1 + 10^(-g(sqrt(RDA^2 + RDB^2)) * (rA - rB) / 400)).
   return expectedScore(stateA.rating, stateB.rating, std::hypot(stateA.rd, stateB.rd));
+}
+
+void writeGlickoPredictions(
+  std::ostream& output,
+  int runID,
+  int numPlayers,
+  int interval,
+  const std::vector<Match>& matches,
+  double initialRating,
+  double initialRD,
+  double rdGrowth
+) {
+  if (runID < 0 || interval <= 0) {
+    throw std::invalid_argument("Invalid Glicko prediction settings");
+  }
+  auto states = initializeGlickoStates(numPlayers, initialRating, initialRD);
+  std::vector<int> counts(states.size(), 0);  // 各人の累積対戦数
+  output.imbue(std::locale::classic());
+  output << "run_id,matches_per_player,player_a,player_b,predicted_p_a_wins\n"
+         << std::setprecision(std::numeric_limits<double>::max_digits10);
+
+  int completed = 0;  // 直前の期間終了時点の累積対戦数
+  for (std::size_t begin = 0; begin < matches.size();) {
+    std::size_t end = begin;
+    while (end < matches.size() && matches[end].periodID == matches[begin].periodID) {
+      end++;
+    }
+    const std::vector<Match> period(matches.begin() + begin, matches.begin() + end);
+    states = updateGlickoPeriod(states, period, initialRD, rdGrowth);  // IDと勝敗も検証する。
+    for (const Match& match : period) {
+      counts[match.playerA]++;
+      counts[match.playerB]++;
+    }
+
+    const int played = counts.front();
+    if (!std::all_of(counts.begin(), counts.end(), [played](int c) { return c == played; })) {
+      throw std::invalid_argument("Match counts differ at the end of a Glicko period");
+    }
+    // 評価時点が期間の途中にあると、更新を終えた状態で予測できない。
+    if ((played - 1) / interval > completed / interval) {
+      throw std::invalid_argument("An evaluation point falls inside a Glicko period");
+    }
+    completed = played;
+    // 第7回会議：Glicko系は期間の更新を終えた時点の予測を記録する。
+    if (completed % interval == 0) {
+      for (int a = 0; a < numPlayers; a++) {
+        for (int b = a + 1; b < numPlayers; b++) {
+          output << runID << ',' << completed << ',' << a << ',' << b << ','
+                 << calculateGlickoWinProbability(states[a], states[b]) << '\n';
+        }
+      }
+    }
+    begin = end;
+  }
+  if (!output) {
+    throw std::runtime_error("Failed to write Glicko predictions");
+  }
 }

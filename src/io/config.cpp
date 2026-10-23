@@ -192,6 +192,46 @@ RatingConfig loadTrueSkillConfig(int runID) {
   return result;
 }
 
+GlickoConfig loadGlickoConfig(int runID) {
+  const auto path = std::filesystem::path("runs") / runDirectoryName(runID) / "config.json";
+  try {
+    const auto config = parseConfig(readConfigText(path));
+    GlickoConfig result{{readInteger(config, "num_players", 2),
+                         readInteger(config, "matches_per_player", 1),
+                         readInteger(config, "evaluation_interval_matches_per_player", 1),
+                         readInteger(config, "rating_period_matches_per_player", 1),
+                         config.at("files").at("predictions").at("Glicko").get<std::string>()},
+                        0.0, 0.0, 0.0};
+    const auto& rating = result.rating;
+    if (readInteger(config, "run_id", 0) != runID || rating.numPlayers % 2 != 0 ||
+        rating.matchesPerPlayer < rating.interval) {
+      throw std::runtime_error("Glickoの設定またはrun IDが不正です。");
+    }
+    const auto& files = config.at("files");
+    if (files.at("players") != "players.csv" || files.at("matches") != "matches.csv" ||
+        rating.predictionsFile != "glicko.csv") {
+      throw std::runtime_error("Glickoのファイル名が規定と一致していません。");
+    }
+    // cは未決定のため既定値を置かず、使った値を設定のスナップショットに残す。
+    if (!config.contains("glicko")) {
+      throw std::runtime_error(
+        "設定にglicko（initial_rating・initial_rd・rd_growth）がありません: " + path.string()
+      );
+    }
+    const auto& glicko = config.at("glicko");
+    result.initialRating = readFiniteNumber(glicko, "initial_rating");
+    result.initialRD = readFiniteNumber(glicko, "initial_rd");
+    result.rdGrowth = readFiniteNumber(glicko, "rd_growth");
+    if (result.initialRD <= 0.0 || result.rdGrowth < 0.0) {
+      throw std::runtime_error("glicko.initial_rdは正、glicko.rd_growthは0以上で指定してください。");
+    }
+    return result;
+  } catch (const json::exception&) {
+    throw std::runtime_error("Glicko用の設定JSONの構文・必須項目・型を確認してください: " +
+                             path.string());
+  }
+}
+
 EvaluationConfig loadEvaluationConfig(int runID, const std::string& algorithm) {
   std::string stem;
   if (algorithm == "Elo") stem = "elo";
