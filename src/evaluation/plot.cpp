@@ -2,23 +2,15 @@
 #include "project10/io/config.hpp"
 #include "project10/io/csv.hpp"
 #include "project10/io/run_lock.hpp"
+#include "project10/io/process.hpp"
 
-#include <cerrno>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <limits>
 #include <locale>
+#include <memory>
 #include <stdexcept>
-#ifdef _WIN32
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-#else
-#include <sys/wait.h>
-#include <unistd.h>
-#endif
 
 namespace project10::evaluation {
 namespace {
@@ -27,42 +19,9 @@ const std::vector<std::string> algorithms{"Elo", "Glicko", "Glicko2", "TrueSkill
 const char* colors[]{"#0072B2", "#D55E00", "#009E73", "#CC79A7"};
 
 void runGnuplot(const std::string& program, const fs::path& directory) {
-  // シェルを通さず引数を渡す。パスはスクリプトへ埋め込まない。
-  auto executable = fs::path(program);
-  if (executable.has_parent_path()) executable = fs::absolute(executable);
-#ifdef _WIN32
-  const auto native = executable.wstring();
-  if (native.find(L'"') != std::wstring::npos) {
-    throw std::invalid_argument("gnuplotのパスに引用符を含めないでください。");
-  }
-  std::wstring command = L"\"" + native + L"\" -d plot.gp";
-  STARTUPINFOW startup{};
-  startup.cb = sizeof(startup);
-  PROCESS_INFORMATION process{};
-  if (!CreateProcessW(nullptr, command.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW,
-                      nullptr, directory.c_str(), &startup, &process)) {
-    throw std::runtime_error("gnuplotを起動できません。PATHまたは--gnuplotを確認してください（コード: " +
-                             std::to_string(GetLastError()) + "）。");
-  }
-  WaitForSingleObject(process.hProcess, INFINITE);
-  DWORD status = 1;
-  const bool obtained = GetExitCodeProcess(process.hProcess, &status) != 0;
-  CloseHandle(process.hThread);
-  CloseHandle(process.hProcess);
-  if (!obtained || status != 0) {
-#else
-  const auto child = fork();
-  if (child < 0) throw std::runtime_error("gnuplotのプロセスを作成できません。");
-  if (child == 0) {
-    if (chdir(directory.c_str()) != 0) _exit(126);
-    execlp(executable.c_str(), executable.c_str(), "-d", "plot.gp", static_cast<char*>(nullptr));
-    _exit(127);
-  }
-  int status = 0;
-  pid_t result;
-  do { result = waitpid(child, &status, 0); } while (result == -1 && errno == EINTR);
-  if (result == -1 || !WIFEXITED(status) || WEXITSTATUS(status) != 0) {
-#endif
+  try {
+    io::runProcess(program, {"-d", "plot.gp"}, directory);
+  } catch (const std::exception&) {
     throw std::runtime_error("gnuplotの起動または描画に失敗しました。PATH・--gnuplot・"
                              "svg/pngcairo端末の対応を確認してください。");
   }
@@ -122,7 +81,7 @@ void validateImage(const fs::path& path, bool png) {
 }  // namespace
 
 void plotRun(int runID, bool png, const std::string& name,
-             const std::string& gnuplot, std::ostream& log) {
+             const std::string& gnuplot, std::ostream& log, const io::RunLock* borrowedLock) {
   if (name.empty() || name.find_first_not_of(
       "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-") != std::string::npos) {
     throw std::invalid_argument("出力名は英数字・ハイフン・アンダースコアで指定してください。");
@@ -131,7 +90,9 @@ void plotRun(int runID, bool png, const std::string& name,
   if (fs::is_symlink(run) || !fs::is_directory(run)) {
     throw std::runtime_error("runの保存先が通常のディレクトリではありません。");
   }
-  const io::RunLock lock(run.parent_path() / ("." + run.filename().string() + ".lock"));
+  const auto lockPath = run.parent_path() / ("." + run.filename().string() + ".lock");
+  if (borrowedLock) borrowedLock->requirePath(lockPath);
+  const auto lock = borrowedLock ? nullptr : std::make_unique<io::RunLock>(lockPath);
   const auto config = io::loadPlotConfig(runID);
   std::vector<MseSeries> series;
   for (const auto& algorithm : algorithms) {

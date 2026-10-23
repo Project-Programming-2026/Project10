@@ -16,6 +16,7 @@ add_library(nlohmann_json::nlohmann_json ALIAS project10_json)
 add_library(project10_core
   src/io/config.cpp
   src/io/csv.cpp
+  src/io/process.cpp
   src/simulation/players.cpp
   src/simulation/latent_parameters.cpp
   src/simulation/probit.cpp
@@ -50,7 +51,14 @@ add_library(project10_plotting src/evaluation/plot.cpp)
 target_link_libraries(project10_plotting PUBLIC project10_core)
 add_executable(project10_plot src/plot_main.cpp)
 target_link_libraries(project10_plot PRIVATE project10_plotting)
+add_executable(project10_predict src/predict_main.cpp)
+target_link_libraries(project10_predict PRIVATE project10_core)
+add_executable(project10_run src/run_main.cpp)
+target_link_libraries(project10_run PRIVATE project10_plotting)
+add_dependencies(project10_run project10_predict project10_glicko project10_trueskill)
 if(MSVC)
+  target_compile_options(project10_predict PRIVATE /utf-8)
+  target_compile_options(project10_run PRIVATE /utf-8)
   target_compile_options(project10 PRIVATE /utf-8)
   target_compile_options(project10_evaluate PRIVATE /utf-8)
   target_compile_options(project10_trueskill PRIVATE /utf-8)
@@ -63,6 +71,11 @@ endif()
 
 include(CTest)
 if(BUILD_TESTING)
+  add_executable(batch_probe tests/batch_probe.cpp)
+  target_link_libraries(batch_probe PRIVATE project10_core)
+  if(MSVC)
+    target_compile_options(batch_probe PRIVATE /utf-8)
+  endif()
   add_executable(trueskill_tests tests/trueskill_tests.cpp)
   target_link_libraries(trueskill_tests PRIVATE project10_core)
   if(MSVC)
@@ -79,7 +92,7 @@ if(BUILD_TESTING)
       -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/trueskill.cmake"
   )
   add_executable(run_services_tests tests/run_services_tests.cpp)
-  target_link_libraries(run_services_tests PRIVATE project10_core nlohmann_json::nlohmann_json)
+  target_link_libraries(run_services_tests PRIVATE project10_plotting nlohmann_json::nlohmann_json)
   if(MSVC)
     target_compile_options(run_services_tests PRIVATE /utf-8)
   endif()
@@ -97,6 +110,18 @@ if(BUILD_TESTING)
   add_test(NAME plot_csv_unit COMMAND plot_tests "${CMAKE_CURRENT_BINARY_DIR}/test-work/plot-csv")
   # 描画プログラムは実行時だけ必要。構成時の取得・必須化は行わない。
   find_program(PROJECT10_GNUPLOT NAMES gnuplot gnuplot-nox)
+  foreach(mode contract render)
+    add_test(NAME batch_${mode}
+      COMMAND "${CMAKE_COMMAND}"
+        "-DPROGRAM=$<TARGET_FILE:project10_run>" "-DBIN=$<TARGET_FILE_DIR:project10_run>"
+        "-DPROBE=$<TARGET_FILE:batch_probe>" "-DEXE=${CMAKE_EXECUTABLE_SUFFIX}"
+        "-DGNUPLOT=${PROJECT10_GNUPLOT}" "-DMODE=${mode}"
+        "-DSAMPLE_CONFIG=${CMAKE_CURRENT_SOURCE_DIR}/configs/run_0000/config.json"
+        "-DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/test-work"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/batch.cmake"
+    )
+  endforeach()
+  set_tests_properties(batch_render PROPERTIES SKIP_REGULAR_EXPRESSION "SKIP: gnuplot")
   foreach(mode IN ITEMS contract render)
     if(mode STREQUAL "contract")
       set(plot_backend "$<TARGET_FILE:plot_renderer_stub>")

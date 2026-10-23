@@ -192,8 +192,19 @@ RatingConfig loadTrueSkillConfig(int runID) {
   return result;
 }
 
-GlickoConfig loadGlickoConfig(int runID) {
-  const auto path = std::filesystem::path("runs") / runDirectoryName(runID) / "config.json";
+RatingConfig loadRatingConfig(int runID, const std::string& algorithm,
+                              const std::filesystem::path& root) {
+  const auto evaluation = loadEvaluationConfig(runID, algorithm, root);
+  const auto config = parseConfig(readConfigText(root / runDirectoryName(runID) / "config.json"));
+  if (config.at("files").at("matches") != "matches.csv") {
+    throw std::runtime_error("予測用のmatchesファイル名が規定と一致していません。");
+  }
+  return {evaluation.numPlayers, evaluation.matchesPerPlayer, evaluation.interval,
+          readInteger(config, "rating_period_matches_per_player", 1), evaluation.predictionsFile};
+}
+
+GlickoConfig loadGlickoConfig(int runID, const std::filesystem::path& root) {
+  const auto path = root / runDirectoryName(runID) / "config.json";
   try {
     const auto config = parseConfig(readConfigText(path));
     GlickoConfig result{{readInteger(config, "num_players", 2),
@@ -232,7 +243,8 @@ GlickoConfig loadGlickoConfig(int runID) {
   }
 }
 
-EvaluationConfig loadEvaluationConfig(int runID, const std::string& algorithm) {
+EvaluationConfig loadEvaluationConfig(int runID, const std::string& algorithm,
+                                      const std::filesystem::path& root) {
   std::string stem;
   if (algorithm == "Elo") stem = "elo";
   else if (algorithm == "Glicko") stem = "glicko";
@@ -240,7 +252,7 @@ EvaluationConfig loadEvaluationConfig(int runID, const std::string& algorithm) {
   else if (algorithm == "TrueSkill") stem = "trueskill";
   else throw std::invalid_argument("未対応の手法名です: " + algorithm);
 
-  const auto path = std::filesystem::path("runs") / runDirectoryName(runID) / "config.json";
+  const auto path = root / runDirectoryName(runID) / "config.json";
   try {
     const auto config = parseConfig(readConfigText(path));
     EvaluationConfig settings{};
@@ -270,8 +282,8 @@ EvaluationConfig loadEvaluationConfig(int runID, const std::string& algorithm) {
   }
 }
 
-PlotConfig loadPlotConfig(int runID) {
-  const auto path = std::filesystem::path("runs") / runDirectoryName(runID) / "config.json";
+PlotConfig loadPlotConfig(int runID, const std::filesystem::path& root) {
+  const auto path = root / runDirectoryName(runID) / "config.json";
   try {
     const auto config = parseConfig(readConfigText(path));
     PlotConfig result{readInteger(config, "run_id", 0),
