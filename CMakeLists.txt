@@ -25,6 +25,7 @@ add_library(project10_core
   src/evaluation/MSE.cpp
   src/ratings/trueskill.cpp
   src/evaluation/run.cpp
+  src/ratings/glicko.cpp
   src/ratings/elo.cpp
 )
 target_include_directories(project10_core PUBLIC
@@ -129,6 +130,12 @@ if(BUILD_TESTING)
   endif()
   add_test(NAME simulation_unit COMMAND simulation_tests)
 
+  add_executable(glicko_tests tests/glicko_tests.cpp)
+  target_link_libraries(glicko_tests PRIVATE project10_core)
+  if(MSVC)
+    target_compile_options(glicko_tests PRIVATE /utf-8)
+  endif()
+  add_test(NAME glicko_unit COMMAND glicko_tests)
   add_executable(elo_tests tests/elo_tests.cpp)
   target_link_libraries(elo_tests PRIVATE project10_core)
   if(MSVC)
