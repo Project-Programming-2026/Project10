@@ -6,19 +6,22 @@
 #include "project10/io/run_lock.hpp"
 
 #include <stdexcept>
+#include <memory>
 #include <system_error>
 
 namespace fs = std::filesystem;
 
 namespace project10::evaluation {
 
-EvaluationResult evaluateRun(int runID, const std::string& algorithm) {
+EvaluationResult evaluateRun(int runID, const std::string& algorithm,
+                             const io::RunLock* borrowedLock) {
   const auto dir = fs::path("runs") / io::runDirectoryName(runID);
   if (fs::is_symlink(dir) || !fs::is_directory(dir)) {
     throw std::runtime_error("実行結果の保存先が存在しないか、通常のディレクトリではありません。");
   }
   const auto lockPath = fs::path("runs") / ("." + dir.filename().string() + ".lock");
-  const io::RunLock lock(lockPath);
+  if (borrowedLock) borrowedLock->requirePath(lockPath);
+  const auto lock = borrowedLock ? nullptr : std::make_unique<io::RunLock>(lockPath);
   const auto config = io::loadEvaluationConfig(runID, algorithm);
   const auto output = dir / config.mseFile;
   if (fs::exists(fs::symlink_status(output))) {

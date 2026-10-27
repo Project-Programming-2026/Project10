@@ -8,13 +8,15 @@
 #include "project10/simulation/players.hpp"
 
 #include <initializer_list>
+#include <memory>
 #include <stdexcept>
 
 namespace fs = std::filesystem;
 
 namespace project10::simulation {
 
-std::optional<GenerationResult> generateRun(int runID, const ConfirmOverwrite& confirm) {
+std::optional<GenerationResult> generateRun(int runID, const ConfirmOverwrite& confirm,
+                                          const io::RunLock* borrowedLock) {
   const auto config = io::loadConfig(runID);
   // 生成を先に終え、生成失敗による空の結果ディレクトリを避ける。
   const auto players = generatePlayers(config.numPlayers);
@@ -28,7 +30,9 @@ std::optional<GenerationResult> generateRun(int runID, const ConfirmOverwrite& c
 
   const auto outputDir = fs::path("runs") / io::runDirectoryName(runID);
   fs::create_directories("runs");
-  const io::RunLock lock(fs::path("runs") / ("." + outputDir.filename().string() + ".lock"));
+  const auto lockPath = fs::path("runs") / ("." + outputDir.filename().string() + ".lock");
+  if (borrowedLock) borrowedLock->requirePath(lockPath);
+  const auto lock = borrowedLock ? nullptr : std::make_unique<io::RunLock>(lockPath);
   if (!fs::create_directory(outputDir)) {
     if (fs::is_symlink(outputDir) || !fs::is_directory(outputDir)) {
       throw std::runtime_error("Output path must be a regular directory.");
