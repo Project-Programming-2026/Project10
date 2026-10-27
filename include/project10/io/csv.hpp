@@ -23,6 +23,7 @@ void writeGroundTruth(
 namespace project10::io {
 
 void validatePlayersCsv(const std::string& path, int numPlayers);
+std::vector<double> readLatentParametersCsv(const std::string& path, int numPlayers);
 std::vector<Match> readMatchesCsv(
   const std::string& path, int numPlayers, int matchesPerPlayer, int period
 );

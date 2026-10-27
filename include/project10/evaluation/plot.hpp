@@ -19,6 +19,6 @@ struct MseSeries {
 // borrowedLock指定時は対象runとの一致を検査し、取得・解放は呼び出し側に任せる。
 void plotRun(int runID, bool png, const std::string& name,
              const std::string& gnuplot, std::ostream& log,
-             const io::RunLock* borrowedLock = nullptr);
+             const io::RunLock* borrowedLock = nullptr, bool reuseExisting = false);
 
 }  // namespace project10::evaluation
