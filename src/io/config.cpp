@@ -262,6 +262,7 @@ EvaluationConfig loadEvaluationConfig(int runID, const std::string& algorithm,
   if (algorithm == "Elo") stem = "elo";
   else if (algorithm == "Glicko") stem = "glicko";
   else if (algorithm == "Glicko2") stem = "glicko2";
+  else if (algorithm == "rankedGlicko2") stem = "ranked_glicko2";
   else if (algorithm == "TrueSkill") stem = "trueskill";
   else throw std::invalid_argument("未対応の手法名です: " + algorithm);
 
@@ -307,7 +308,7 @@ PlotConfig loadPlotConfig(int runID, const std::filesystem::path& root) {
     }
     const auto& files = config.at("files").at("mse");
     if (!files.is_object()) throw std::runtime_error("files.mseはオブジェクトで指定してください。");
-    const std::set<std::string> algorithms{"Elo", "Glicko", "Glicko2", "TrueSkill"};
+    const std::set<std::string> algorithms{"Elo", "Glicko", "Glicko2", "rankedGlicko2", "TrueSkill"};
     std::set<std::string> names;
     for (const auto& item : files.items()) {
       if (algorithms.count(item.key()) == 0) {

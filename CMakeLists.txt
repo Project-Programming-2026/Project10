@@ -22,6 +22,7 @@ add_library(project10_core
   src/simulation/probit.cpp
   src/simulation/matches.cpp
   src/ratings/glicko2.cpp
+  src/ratings/ranked_glicko2.cpp
   src/simulation/run.cpp
   src/evaluation/MSE.cpp
   src/ratings/trueskill.cpp
