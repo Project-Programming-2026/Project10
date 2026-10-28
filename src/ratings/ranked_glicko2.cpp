@@ -14,7 +14,7 @@ namespace fs = filesystem;
 namespace{
 
 static fs::path output_file = "ranked_glicko2.csv";
-static fs::path input_file_rating = "glicko2_rating.csv";
+static fs::path input_file_rating = "samples/glicko_baseline/glicko2_rating.csv";
 static fs::path input_file_players = "players.csv";
 static fs::path input_file_matches = "matches.csv";
 static const double tau = 0.5; //ボラティリティの変動しやすさ
@@ -103,7 +103,7 @@ public:
     }
     bool get_initialized();
     double get_rank_ratio(int rank);
-    void initialize_ideal(fs::path file_path); //理想分布の初期操作
+    void initialize_ideal(); //理想分布の初期操作
     void initialize_current(); //現在分布の初期操作
     void reset(); //初期操作前に戻す
 };
@@ -192,12 +192,12 @@ void Player::update(Distribution ideal, Distribution current){
 bool Distribution::get_initialized(){return initialized;}
 double Distribution::get_rank_ratio(int rank){return distribution.at(rank);}
 
-void Distribution::initialize_ideal(fs::path file_path){
+void Distribution::initialize_ideal(){
     if(initialized){
         cerr << "you cannot initialize Distribution two times." << endl;
         throw runtime_error("The source code has fatal issue on Distribution::initialize_ideal.");
     }
-    ifstream in_rating(file_path / input_file_rating);
+    ifstream in_rating(input_file_rating);
     if(!in_rating){
         cerr << "could not open glicko2_rating.csv." << endl;
         throw runtime_error("Failed to open: glicko2_rating.csv");
@@ -327,7 +327,7 @@ void generate_ranked_glicko2_prediction(int run_id, fs::path file_path){
     in_players.close();
     //理想分布、現在分布の作成
     Distribution ideal, current;
-    ideal.initialize_ideal(file_path);
+    ideal.initialize_ideal();
     current.initialize_current();
     //対戦
     int current_period = 0;
