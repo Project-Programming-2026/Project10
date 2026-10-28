@@ -11,7 +11,10 @@
 using namespace std;
 namespace fs = filesystem;
 
-static fs::path output_file = "glicko2.csv"; //一旦カレントディレクトリとする
+namespace{
+
+static fs::path output_file = "glicko2.csv";
+static fs::path output_file_rating = "glicko2_rating.csv";
 static fs::path input_file_players = "players.csv";
 static fs::path input_file_matches = "matches.csv";
 static const double tau = 0.5; //ボラティリティの変動しやすさ
@@ -179,6 +182,8 @@ void output(int run_id, int period, fs::path file_path){
     out.close();
 }
 
+} //namespace
+
 void generate_glicko2_prediction(int run_id, fs::path file_path){
     string line;
     //プレイヤー登録
@@ -238,7 +243,12 @@ void generate_glicko2_prediction(int run_id, fs::path file_path){
     //最後に一回更新、集計
     update_all();
     output(run_id,current_period,file_path);
-
+    ofstream out_rating(file_path / output_file_rating);
+    out_rating << "rating" << endl;
+    for(int i=0; i<(int)exist_player.size(); i++){
+        int a = exist_player.at(i);
+        out_rating << players.at(a)->get_rate() << endl;
+    }
     for(auto [_, player]:players) delete(player);
 }
 
