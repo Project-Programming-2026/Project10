@@ -4,7 +4,6 @@
 #include "project10/io/run_lock.hpp"
 #include "project10/io/process.hpp"
 
-#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -29,22 +28,6 @@ void runGnuplot(const std::string& program, const fs::path& directory) {
   }
 }
 
-double yMaximum(const std::vector<MseSeries>& series) {
-  double largest = 0.0;
-  for (const auto& method : series)
-    for (const auto& point : method.points) largest = std::max(largest, point.mse);
-  // 全点が0でも有効な軸幅を確保する。正の値は10%の余白を取り、1・2・5倍へ切り上げる。
-  if (largest == 0.0) return 0.01;
-  const double target = std::min(1.0, largest * 1.1);
-  double unit = 1.0;
-  while (unit > target && unit / 10.0 > 0.0) unit /= 10.0;
-  for (const double factor : {1.0, 2.0, 5.0}) {
-    const double upper = std::min(1.0, unit * factor);
-    if (upper >= target) return upper;
-  }
-  return std::min(1.0, unit * 10.0);
-}
-
 std::string makeScript(int runID, int maximum, const std::vector<MseSeries>& series, bool png) {
   std::ostringstream script;
   script.imbue(std::locale::classic());
@@ -60,9 +43,7 @@ std::string makeScript(int runID, int maximum, const std::vector<MseSeries>& ser
   }
   script << "set encoding utf8\nset title 'Run " << runID << " - MSE comparison'\n"
          << "set xlabel 'Cumulative matches per player'\nset ylabel 'MSE'\n"
-         << "set xrange [0:" << maximum << "]\nset yrange [0:"
-         << std::setprecision(6) << yMaximum(series) << "]\n"
-         << std::setprecision(std::numeric_limits<double>::max_digits10)
+         << "set xrange [0:" << maximum << "]\nset yrange [0:1]\n"
          << "set grid xtics ytics\nset key outside right center\n";
   for (std::size_t i = 0; i < algorithms.size(); ++i) {
     script << "set style line " << i + 1 << " lc rgb '" << colors[i]
