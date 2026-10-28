@@ -30,6 +30,7 @@ add_library(project10_core
   src/evaluation/reuse.cpp
   src/ratings/glicko.cpp
   src/ratings/elo.cpp
+  src/ratings/advantage_elo.cpp
 )
 target_include_directories(project10_core PUBLIC
   "${CMAKE_CURRENT_SOURCE_DIR}/include"
@@ -193,6 +194,13 @@ if(BUILD_TESTING)
     target_compile_options(elo_tests PRIVATE /utf-8)
   endif()
   add_test(NAME elo_unit COMMAND elo_tests)
+
+  add_executable(advantage_elo_tests tests/advantage_elo_tests.cpp)
+  target_link_libraries(advantage_elo_tests PRIVATE project10_core)
+  if(MSVC)
+    target_compile_options(advantage_elo_tests PRIVATE /utf-8)
+  endif()
+  add_test(NAME advantage_elo_unit COMMAND advantage_elo_tests)
 
   foreach(case generation reproducibility invalid_input invalid_config duplicate_keys missing_config
       overwrite output_paths symlink_outputs hardlink_outputs run_lock initial_scale seed_roles)
