@@ -12,6 +12,11 @@
     "std": 1.0
   },
   "performance_std": 1.0,
+  "glicko": {
+    "initial_rating": 1500,
+    "initial_rd": 350,
+    "rd_growth": 0
+  },
   "matchmaking": "uniform_random",
   "seeds": {
     "ability": 2026101601,
