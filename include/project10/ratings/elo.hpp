@@ -46,8 +46,15 @@ public:
   // 現在の推定レートに基づき、playerAがplayerBに勝つ予測確率（0〜1）を返す。
   double predictWinProbability(int playerA, int playerB) const;
 
+  // playerA側のレートに一時的な条件補正量 ratingOffsetA（Eloポイント単位）を加味した予測確率を返す。
+  double predictWinProbability(int playerA, int playerB, double ratingOffsetA) const;
+
   // 1試合の結果（resultA: A勝利=1, A敗北=0）を観測し、試合前の予測勝率を使って両者のレートを同時更新する。
   void updateMatch(int playerA, int playerB, int resultA);
+
+  // playerA側のレートに一時的な条件補正量 ratingOffsetA を加味した試合前予測勝率を使って
+  // 両者のレートを同時更新し、更新に使用した試合前予測勝率 p_A を返す。
+  double updateMatch(int playerA, int playerB, int resultA, double ratingOffsetA);
   void updateMatch(const Match& match);
 
 private:

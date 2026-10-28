@@ -116,16 +116,42 @@ const std::vector<int>& EloRating::matchCounts() const noexcept {
 
 // 今のレートをもとに「AがBに勝つ確率」を予想する
 double EloRating::predictWinProbability(int playerA, int playerB) const {
+  return predictWinProbability(playerA, playerB, 0.0);
+}
+
+// 今のレートと一時的な条件補正量をもとに「AがBに勝つ確率」を予想する
+double EloRating::predictWinProbability(
+  int playerA,
+  int playerB,
+  double ratingOffsetA
+) const {
   validatePlayerID(playerA);
   validatePlayerID(playerB);
   if (playerA == playerB) {
     throw std::invalid_argument("A player cannot play against themselves");
   }
-  return calculateEloWinProbability(ratings_[playerA], ratings_[playerB], params_.scale);
+  if (!std::isfinite(ratingOffsetA)) {
+    throw std::invalid_argument("ratingOffsetA must be finite");
+  }
+  const double effectiveRatingA = ratings_[playerA] + ratingOffsetA;
+  if (!std::isfinite(effectiveRatingA)) {
+    throw std::invalid_argument("effective ratingA must be finite");
+  }
+  return calculateEloWinProbability(effectiveRatingA, ratings_[playerB], params_.scale);
 }
 
 // 試合結果をもとに、2人のレートを更新する
 void EloRating::updateMatch(int playerA, int playerB, int resultA) {
+  (void)updateMatch(playerA, playerB, resultA, 0.0);
+}
+
+// 試合結果と一時的な条件補正量をもとに、2人のレートを更新し、試合前の予測勝率を返す
+double EloRating::updateMatch(
+  int playerA,
+  int playerB,
+  int resultA,
+  double ratingOffsetA
+) {
   validatePlayerID(playerA);
   validatePlayerID(playerB);
   if (playerA == playerB) {
@@ -135,8 +161,8 @@ void EloRating::updateMatch(int playerA, int playerB, int resultA) {
     throw std::invalid_argument("resultA must be 1 (win) or 0 (loss)");
   }
 
-  // 1. 試合前のレートから「Aが勝つ確率」を計算
-  const double expectedA = predictWinProbability(playerA, playerB);
+  // 1. 試合前のレート（および条件補正量）から「Aが勝つ確率」を計算
+  const double expectedA = predictWinProbability(playerA, playerB, ratingOffsetA);
   const double actualA = static_cast<double>(resultA);
 
   // 2. 公式に従って変動量を計算: Δ = K * (実結果 - 予想勝率)
@@ -157,6 +183,8 @@ void EloRating::updateMatch(int playerA, int playerB, int resultA) {
   // 5. 試合数を1増やす
   matchCounts_[playerA] += 1;
   matchCounts_[playerB] += 1;
+
+  return expectedA;
 }
 
 void EloRating::updateMatch(const Match& match) {
