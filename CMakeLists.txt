@@ -76,6 +76,40 @@ endif()
 
 include(CTest)
 if(BUILD_TESTING)
+  find_program(PROJECT10_GNUPLOT NAMES gnuplot gnuplot-nox)
+  add_executable(comparison_tests tests/comparison_tests.cpp)
+  target_link_libraries(comparison_tests PRIVATE project10_core)
+  if(MSVC)
+    target_compile_options(comparison_tests PRIVATE /utf-8)
+  endif()
+  add_test(NAME comparison_unit COMMAND comparison_tests "${CMAKE_CURRENT_BINARY_DIR}/test-work/comparison-unit")
+  foreach(mode contract render)
+    add_test(NAME comparison_${mode}
+      COMMAND "${CMAKE_COMMAND}" "-DPROGRAM=$<TARGET_FILE:project10_run>"
+        "-DBIN=$<TARGET_FILE_DIR:project10_run>" "-DEXE=${CMAKE_EXECUTABLE_SUFFIX}"
+        "-DPROBE=$<TARGET_FILE:batch_probe>" "-DGNUPLOT=${PROJECT10_GNUPLOT}"
+        "-DMODE=${mode}" "-DSOURCE=${CMAKE_CURRENT_SOURCE_DIR}"
+        "-DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/test-work"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/comparison.cmake")
+  endforeach()
+  set_tests_properties(comparison_render PROPERTIES SKIP_REGULAR_EXPRESSION "SKIP: gnuplot")
+  add_executable(six_methods_tests tests/six_methods_tests.cpp)
+  target_link_libraries(six_methods_tests PRIVATE project10_core)
+  if(MSVC)
+    target_compile_options(six_methods_tests PRIVATE /utf-8)
+  endif()
+  add_test(NAME six_methods_unit COMMAND six_methods_tests "${CMAKE_CURRENT_BINARY_DIR}/test-work/six-unit")
+  foreach(mode contract render)
+    add_test(NAME six_methods_${mode}
+      COMMAND "${CMAKE_COMMAND}" "-DPROGRAM=$<TARGET_FILE:project10_run>"
+        "-DBIN=$<TARGET_FILE_DIR:project10_run>" "-DEXE=${CMAKE_EXECUTABLE_SUFFIX}"
+        "-DPROBE=$<TARGET_FILE:batch_probe>" "-DGNUPLOT=${PROJECT10_GNUPLOT}"
+        "-DMODE=${mode}" "-DSAMPLE_CONFIG=${CMAKE_CURRENT_SOURCE_DIR}/configs/run_0008/config.json"
+        "-DBASELINE=${CMAKE_CURRENT_SOURCE_DIR}/samples/glicko_baseline"
+        "-DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/test-work"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/six_methods.cmake")
+  endforeach()
+  set_tests_properties(six_methods_render PROPERTIES SKIP_REGULAR_EXPRESSION "SKIP: gnuplot")
   add_executable(batch_probe tests/batch_probe.cpp)
   target_link_libraries(batch_probe PRIVATE project10_core)
   if(MSVC)
@@ -114,7 +148,6 @@ if(BUILD_TESTING)
   endif()
   add_test(NAME plot_csv_unit COMMAND plot_tests "${CMAKE_CURRENT_BINARY_DIR}/test-work/plot-csv")
   # 描画プログラムは実行時だけ必要。構成時の取得・必須化は行わない。
-  find_program(PROJECT10_GNUPLOT NAMES gnuplot gnuplot-nox)
   foreach(mode contract render links)
     add_test(NAME reuse_${mode}
       COMMAND "${CMAKE_COMMAND}" "-DPROGRAM=$<TARGET_FILE:project10_run>"
