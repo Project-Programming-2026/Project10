@@ -2,7 +2,7 @@
 
 プロジェクト実験2026・第10班のリポジトリです。仮想的な対戦データを使い、レーティング手法が対戦勝率をどれだけ正確に推定できるか、対戦数とともに誤差がどう変化するかを比較します。
 
-現在は、データ生成、Elo・Glicko・Glicko-2・TrueSkillの予測、共通MSE評価、単一runの比較グラフ生成を実装しています。`project10_run` で全工程を一括実行し、`--reuse-existing` で検証済みの既存成果物を再利用できます。C++17・CMakeでビルドし、CTestで検証できます。高度な復旧・実行履歴管理・複数試行の連続実行や集計は未実装です。
+現在は、データ生成、Elo・Glicko・Glicko-2・TrueSkillの予測、共通MSE評価、単一runの比較グラフ生成を実装しています。`project10_run` で全工程を一括実行し、`--reuse-existing` で検証済みの既存成果物を再利用できます。追加2手法は、`--all-methods` による[6手法の一括実行](#6手法の一括実行固定参照)と、`--comparison` による[先手有利あり／なしの比較](#先手有利ありなしの比較実験)に対応しています。C++17・CMakeでビルドし、CTestで検証できます。高度な復旧・実行履歴管理・複数試行の連続実行や集計は未実装です。
 
 ## 目次
 
@@ -355,7 +355,7 @@ Ninjaでビルドした場合、リポジトリ直下で次を実行します。
 ./build/dev/project10_evaluate
 ```
 
-run ID、続いて `Elo`・`Glicko`・`Glicko2`・`TrueSkill` のいずれかを入力します。1回で1試行・1手法を処理し、他の手法の予測CSVは不要です。設定の `files.predictions` と `files.mse` には既定の手法別ファイル名を指定します（例：`elo.csv` → `elo_mse.csv`）。
+run ID、続いて `Elo`・`Glicko`・`Glicko2`・`TrueSkill`・`AdvantageElo`・`rankedGlicko2` のいずれかを入力します。1回で1試行・1手法を処理し、他の手法の予測CSVは不要です。設定の `files.predictions` と `files.mse` には既定の手法別ファイル名を指定します（例：`elo.csv` → `elo_mse.csv`）。追加2手法の比較上の制約は後述の6手法モードを参照してください。
 
 | ファイル | ヘッダー |
 | --- | --- |
@@ -429,6 +429,69 @@ Glickoの初期レート・RD・`rd_growth` も明示指定が必要です。設
 
 v1マーカーには入力ハッシュ・コミット・環境の記録がありません。検査は形式と成果物間の整合性を確認するもので、保存済み予測を当該コード・設定・シードから生成したことまでは証明できません。同じコード・環境のrunであることは利用者が確認し、変更した条件での正式実験は新しいrun IDで実行してください。
 
+### 6手法の一括実行（固定参照）
+
+[PR #28](https://github.com/Project-Programming-2026/Project10/pull/28)のranked Glicko-2を一括CLIへ接続しています。`--all-methods`で、生成1回 → Elo・Glicko・Glicko-2・TrueSkill・Advantage-Elo・ranked Glicko-2の予測と各MSE → 6曲線のSVG／PNGを実行します。通常のオプションなしの実行は既存4手法です。
+
+ranked Glicko-2は、別シードで生成された固定の`samples/glicko_baseline/glicko2_rating.csv`を使います。評価run自身のGlicko-2最終レートは参照しません。固定分布は1,000人・各200対戦・先手有利なしのrun 3601に対応し、出典・設定・SHA-256は[固定参照の説明](samples/glicko_baseline/README.md)に記載しています。参照用の学習を追加で使う手法であることを、比較条件として明記してください。
+
+新しい実行用設定[configs/run_0008/config.json](configs/run_0008/config.json)を用意しています。1,000人・各200対戦、期間・評価間隔10、先手有利なしです。既存run_0000〜0007を上書きせず、新しいrun_0008へ保存します。設定値は実行例であり、推奨値や調整済みの最終研究条件ではありません。
+
+リポジトリ直下で次を実行します。gnuplotも必要です。
+
+```sh
+cmake -S . -B build/dev -G Ninja -DCMAKE_BUILD_TYPE=Debug
+cmake --build build/dev --parallel 4
+printf '8\n' | ./build/dev/project10_run --all-methods --png
+```
+
+PowerShellでは`"8" | .\build\dev\project10_run.exe --all-methods --png`です。出力は`runs/run_0008/`、図は`graphs/mse.svg`・`graphs/mse.png`です。`--png`を省略するとSVGのみ生成します。
+
+| 手法の指定名 | 予測CSV | MSE CSV |
+| --- | --- | --- |
+| `AdvantageElo` | `advantage_elo.csv` | `advantage_elo_mse.csv` |
+| `rankedGlicko2` | `ranked_glicko2.csv` | `ranked_glicko2_mse.csv` |
+
+既存4手法と上記2手法を`files.predictions`・`files.mse`に指定します。全設定と固定分布を生成前に検査します。分布はヘッダー・有限値・参照設定の人数との一致を検査します。分布の学習人数は評価人数と独立です。参照元と同じrun ID、または対応する能力・組合せ・勝敗シードが同じ設定は拒否します。
+
+- 手法の更新式・予測式は既存PRのものを使います。通常S0のAdvantage-Eloは履歴のAを条件側として更新し、全ペア予測は`0.5 * (p(z=+1) + p(z=-1))`とします。生成モデル・既存MSEの定義は今回変更していません。
+- 固定参照の設定とCSVを`ranked_reference/glicko_baseline/`へ保存します。隔離された推定器の作業先では、PR #28の相対パス`samples/glicko_baseline/glicko2_rating.csv`を再現します。推定器へ潜在能力・正解勝率・参照元の完全な生成設定は渡しません。
+- 個別実行はリポジトリ直下の`project10_predict 8 rankedGlicko2`も利用できます。固定参照CSVが必要で、同じrun内の`glicko2_rating.csv`は使いません。既存予測CSVがある場合は上書きしません。
+- グラフのタイトル・凡例に固定参照の利用を明示します。標準Glicko-2自身の最終レートCSVも補助成果物として保存しますが、rankedの入力には使いません。
+
+中断後の同一条件の再利用は次のコマンドです。
+
+```sh
+printf '8\n' | ./build/dev/project10_run --all-methods --reuse-existing --png
+```
+
+新しいマーカーは`mode=six_method_fixed_reference_v1`です。再利用はrun内に保存した固定参照を使い、外部のsamplesが移動・更新されてもそのrunの参照を切り替えません。形式・設定・MSEなどの既存検査と、保存した固定参照の検査を行います。旧`six_method_smoke_v1`や独立run指定の成果物を新モードで再利用する操作は拒否します。旧`--ranked-reference-run`も拒否します。参照方式を変更する実験には新しいrun IDを使ってください。
+
+WSL2 UbuntuのC++17 DebugでCTest全37件が成功しました。8人・20対戦に対してPR #28の1,000人分の固定分布を使い、6手法の結合、個別CLIとのCSV一致、実SVG／PNG、入力分離・ロック・既存最終レートの保護、再利用・欠落分生成・不正分布の拒否を確認しています。PR #28の参照方式でのrun_0008の大規模実験と、今回の追加のWindows／MSVCでの動作は未検証です。
+
+### 先手有利あり／なしの比較実験
+
+既存の`--comparison`は、先手・後手を無作為に割り当てた生成データを、条件付きMSEとElo・Advantage-Eloの対戦前Log Loss・Brierスコアで評価します。単独では5手法、`--all-methods`を併用するとPR #28の固定参照を使う6手法です。
+
+先手有利ありの実行用設定は[configs/run_0009/config.json](configs/run_0009/config.json)です。run_0008と同じ1,000人・200対戦、能力・組合せ・勝敗の3シードを使い、潜在能力の単位で有利幅1を加えます。同じ能力なら先手の真の勝率は約76%、後手は約24%です。条件割当のシードは2026102812、Advantage-Eloの初期条件効果0・学習率1を明示しています。
+
+```sh
+printf '9\n' | ./build/dev/project10_run --comparison --all-methods --png
+```
+
+run_0008は側を平均した勝率、run_0009は側ごとの条件付き勝率を評価するため、両runのAdvantage-EloのMSEは予測対象の違いも含みます。run内の手法間比較と、条件を変えたrun間の比較を区別してください。
+
+```sh
+# 新しいrun IDに対応するcomparison設定を用意してから、対話入力でIDを指定する。
+./build/dev/project10_run --comparison --all-methods --png
+```
+
+`comparison`設定と生成モデル・評価式は今回変更していません。既存のrun_0004〜0007は旧方式の成果物として保持し、参照方式の変更を混在させません。新しい設定は新しいrun IDへ保存してください。旧`--ranked-reference-run ID`は使いません。
+
+条件付き評価の出力は`graphs/mse.svg`・`online_log_loss.svg`・`online_brier.svg`です。`--png`ではPNGも生成します。`--reuse-existing`は同一モード・設定・固定参照の整合性を確認します。
+
+**先手情報を使うAdvantage-Eloと、固定の追加学習分布を使うranked Glicko-2では、利用する情報が他手法と異なります。** PR #28の接続だけで同一情報・同一学習予算の比較になるわけではありません。固定参照は先手有利なしで学習した分布であり、S1では参照と評価の生成条件も異なります。今回のS1結果を6手法の純粋な優劣の結論として扱わないでください。評価式・CSV仕様・制約は[比較実験の基盤](docs/comparison.md)を参照してください。
+
 ### MSEの比較グラフ生成
 
 `project10_plot` は生成・評価とは独立したC++17のコマンドです。ビルドには追加ライブラリ不要で、描画時だけ **gnuplot 5.4以降（`svg`端末、PNG使用時は`pngcairo`端末）** が必要です。Python・GUI・画面表示は使いません。技術比較、ライセンスと検証環境は [描画方式の選定](docs/plotting.md) を参照してください。
@@ -449,7 +512,7 @@ Windows（PowerShell）の例です。
 # Enter run ID: に対象runのIDを入力
 ```
 
-入力は `runs/run_XXXX/config.json` の `files.mse` に記載された `Elo`・`Glicko`・`Glicko2`・`TrueSkill` のCSVです。生成器・予測器・正解勝率は不要です。run直下の英数字・`_`・`-`・`.`からなる `.csv` 名を受け付け、パス・`..`・重複名は拒否します。設定にない手法・存在しないファイルは理由を表示して省略します。存在する不正なCSVは省略せずエラーにし、1手法もなければ停止します。
+入力は `runs/run_XXXX/config.json` の `files.mse` に記載された `Elo`・`Glicko`・`Glicko2`・`TrueSkill`・`AdvantageElo`・`rankedGlicko2` のCSVです。生成器・予測器・正解勝率は不要です。run直下の英数字・`_`・`-`・`.`からなる `.csv` 名を受け付け、パス・`..`・重複名は拒否します。設定にない手法・存在しないファイルは理由を表示して省略します。存在する不正なCSVは省略せずエラーにし、1手法もなければ停止します。
 
 ヘッダーは `run_id,matches_per_player,mse`、LF・CRLF、任意の行順に対応します。run IDの一致、正の評価間隔の倍数、総対戦数以内、評価時点の重複・欠落、MSEが0〜1の有限値であることを検証します。全手法で設定上の全評価時点が必要です。例として総対戦数25・間隔10なら10・20を要求し、一部手法だけ20が欠けた場合も、比較条件の不一致として停止します。補間・欠落行の除外はしません。
 
