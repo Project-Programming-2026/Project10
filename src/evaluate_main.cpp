@@ -19,7 +19,7 @@ int main() {
     if (!(parser >> runID) || runID < 0 || !(parser >> std::ws).eof()) {
       throw std::invalid_argument("run IDが不正です。0以上の整数を入力してください。");
     }
-    std::cout << "Enter algorithm (Elo/Glicko/Glicko2/TrueSkill): ";
+    std::cout << "Enter algorithm (Elo/Glicko/Glicko2/TrueSkill/AdvantageElo/rankedGlicko2): ";
     std::string algorithm;
     std::getline(std::cin, algorithm);
     const auto result = project10::evaluation::evaluateRun(runID, algorithm);

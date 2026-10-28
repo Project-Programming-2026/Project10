@@ -23,6 +23,22 @@ std::vector<MseResult> calculateRunMse(int runID, const std::string& algorithm,
   const auto lock = borrowedLock ? nullptr : std::make_unique<io::RunLock>(lockPath);
   const auto config = io::loadEvaluationConfig(runID, algorithm);
   io::validatePlayersCsv((dir / "players.csv").string(), config.numPlayers);
+  if (config.conditional) {
+    MseEvaluator positive(runID, config.matchesPerPlayer, config.interval,
+      io::readGroundTruthCsv((dir / "ground_truth_positive.csv").string(), config.numPlayers));
+    MseEvaluator negative(runID, config.matchesPerPlayer, config.interval,
+      io::readGroundTruthCsv((dir / "ground_truth_negative.csv").string(), config.numPlayers));
+    const auto path = (dir / config.predictionsFile).string();
+    if (algorithm == "AdvantageElo") io::readConditionalPredictionsCsv(path, positive, negative);
+    else io::consumePredictionsCsv(path, [&](const auto& row) {
+      positive.addPrediction(row); negative.addPrediction(row);
+    });
+    auto results = positive.finish();
+    const auto other = negative.finish();
+    for (std::size_t i = 0; i < results.size(); ++i)
+      results[i].mse = 0.5 * (results[i].mse + other[i].mse);
+    return results;
+  }
   MseEvaluator evaluator(
     runID, config.matchesPerPlayer, config.interval,
     io::readGroundTruthCsv((dir / "ground_truth.csv").string(), config.numPlayers)

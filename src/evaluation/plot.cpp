@@ -3,6 +3,7 @@
 #include "project10/io/csv.hpp"
 #include "project10/io/run_lock.hpp"
 #include "project10/io/process.hpp"
+#include "project10/evaluation/reference.hpp"
 
 #include <algorithm>
 #include <filesystem>
@@ -17,8 +18,8 @@
 namespace project10::evaluation {
 namespace {
 namespace fs = std::filesystem;
-const std::vector<std::string> algorithms{"Elo", "Glicko", "Glicko2", "TrueSkill"};
-const char* colors[]{"#0072B2", "#D55E00", "#009E73", "#CC79A7"};
+const auto algorithms = io::ratingMethods(true);
+const char* colors[]{"#0072B2", "#D55E00", "#009E73", "#CC79A7", "#E69F00", "#56B4E9"};
 
 void runGnuplot(const std::string& program, const fs::path& directory) {
   try {
@@ -45,7 +46,9 @@ double yMaximum(const std::vector<MseSeries>& series) {
   return std::min(1.0, unit * 10.0);
 }
 
-std::string makeScript(int runID, int maximum, const std::vector<MseSeries>& series, bool png) {
+std::string makeScript(int runID, int maximum, const std::vector<MseSeries>& series, bool png,
+                       const std::string& scenario, bool fixedReference,
+                       const std::vector<OnlineMetrics>& metrics) {
   std::ostringstream script;
   script.imbue(std::locale::classic());
   script << std::setprecision(std::numeric_limits<double>::max_digits10);
@@ -58,13 +61,23 @@ std::string makeScript(int runID, int maximum, const std::vector<MseSeries>& ser
     }
     script << "EOD\n";
   }
-  script << "set encoding utf8\nset title 'Run " << runID << " - MSE comparison'\n"
+  std::size_t styles = metrics.empty() ? 4 : 5;
+  bool smoke = false;
+  for (const auto& method : series) {
+    const auto index = std::find(algorithms.begin(), algorithms.end(), method.algorithm) - algorithms.begin();
+    styles = std::max(styles, static_cast<std::size_t>(index + 1));
+    smoke = smoke || (!fixedReference && scenario.empty() && method.algorithm == "rankedGlicko2");
+  }
+  script << "set encoding utf8\nset title 'Run " << runID << " - MSE comparison"
+         << (scenario.empty() ? "" : " (" + scenario + "; conditional, both sides)")
+         << (fixedReference ? " (fixed baseline; PR #28)" : "")
+         << (smoke ? " (same-run final reference; smoke test only)" : "") << "'\n"
          << "set xlabel 'Cumulative matches per player'\nset ylabel 'MSE'\n"
          << "set xrange [0:" << maximum << "]\nset yrange [0:"
          << std::setprecision(6) << yMaximum(series) << "]\n"
          << std::setprecision(std::numeric_limits<double>::max_digits10)
          << "set grid xtics ytics\nset key outside right center\n";
-  for (std::size_t i = 0; i < algorithms.size(); ++i) {
+  for (std::size_t i = 0; i < styles; ++i) {
     script << "set style line " << i + 1 << " lc rgb '" << colors[i]
            << "' dt " << i + 1 << " lw 2 pt " << i + 5 << " ps 0.8\n";
   }
@@ -73,13 +86,36 @@ std::string makeScript(int runID, int maximum, const std::vector<MseSeries>& ser
     std::size_t style = 0;
     while (algorithms[style] != series[i].algorithm) ++style;
     if (i != 0) script << ", ";
+    const auto& method = series[i].algorithm;
+    const std::string label = method == "Glicko2" ? "Glicko-2" :
+      method == "AdvantageElo" ? "Advantage-Elo (" + (scenario.empty() ? std::string("S0") : scenario) + ")" :
+      method == "rankedGlicko2" ? (fixedReference ? "ranked Glicko-2 (fixed baseline)" :
+        smoke ? "ranked Glicko-2 (smoke only)" : "ranked Glicko-2 (independent ref.)") : method;
     script << "$data" << i << " using 1:2 with linespoints ls " << style + 1
-           << " title '" << (series[i].algorithm == "Glicko2" ? "Glicko-2" : series[i].algorithm) << "'";
+           << " title '" << label << "'";
   }
   script << "\nunset output\n";
   if (png) {
     script << "set terminal pngcairo size 1000,650 noenhanced\nset output 'mse.png'\n"
            << "replot\nunset output\n";
+  }
+  if (!metrics.empty()) {
+    script << "$online << EOD\n";
+    for (const auto& row : metrics) script << row.matchesPerPlayer << ' ' << row.eloLogLoss << ' '
+      << row.advantageLogLoss << ' ' << row.eloBrier << ' ' << row.advantageBrier << '\n';
+    script << "EOD\n";
+    for (int metric = 0; metric < 2; ++metric) {
+      const std::string stem = metric == 0 ? "online_log_loss" : "online_brier";
+      const std::string label = metric == 0 ? "Log Loss" : "Brier Score";
+      script << "set title 'Run " << runID << " - " << scenario << " pre-match " << label
+        << " (cumulative mean)'\nset ylabel '" << label << "'\nset yrange [0:*]\n"
+        << "set terminal svg size 1000,650 noenhanced\nset output '" << stem << ".svg'\n"
+        << "plot $online using 1:" << (metric == 0 ? 2 : 4)
+        << " with linespoints ls 1 title 'Elo', $online using 1:" << (metric == 0 ? 3 : 5)
+        << " with linespoints ls 5 title 'Advantage-Elo'\nunset output\n";
+      if (png) script << "set terminal pngcairo size 1000,650 noenhanced\nset output '"
+        << stem << ".png'\nreplot\nunset output\n";
+    }
   }
   return script.str();
 }
@@ -134,6 +170,20 @@ void plotRun(int runID, bool png, const std::string& name,
     log << "使用: " << algorithm << " <- " << path.string() << '\n';
   }
   if (series.empty()) throw std::runtime_error("描画できるMSEファイルがありません。");
+  const bool ranked = std::any_of(series.begin(), series.end(), [](const auto& value) {
+      return value.algorithm == "rankedGlicko2";
+    });
+  const bool fixedReference = ranked && io::isFixedReferenceRun(runID);
+  if (fixedReference) validateFixedReference(runID);
+  else if (ranked && !config.scenario.empty())
+    validateSavedReference(io::loadConfig(runID, "runs"), io::comparisonReferenceRun(runID));
+  std::vector<OnlineMetrics> metrics;
+  if (!config.scenario.empty()) {
+    const auto path = run / "online_metrics.csv";
+    if (!fs::is_regular_file(fs::symlink_status(path)))
+      throw std::runtime_error("比較グラフには通常ファイルのonline_metrics.csvが必要です。");
+    metrics = io::readOnlineMetricsCsv(path.string(), runID, config.matchesPerPlayer, config.interval);
+  }
   const auto output = run / name;
   if (reuseExisting && fs::exists(fs::symlink_status(output))) {
     if (!fs::is_directory(fs::symlink_status(output)) ||
@@ -144,6 +194,10 @@ void plotRun(int runID, bool png, const std::string& name,
       throw std::runtime_error("既存グラフにPNGがありません。--nameで別名を指定してください。");
     validateImage(output / "mse.svg", false);
     if (savedPng) validateImage(output / "mse.png", true);
+    if (!metrics.empty()) for (const auto* stem : {"online_log_loss", "online_brier"}) {
+      validateImage(output / (std::string(stem) + ".svg"), false);
+      if (savedPng) validateImage(output / (std::string(stem) + ".png"), true);
+    }
     std::ifstream file(output / "plot.gp");
     if (!file) throw std::runtime_error("既存の描画スクリプトを開けません。");
     std::string actual, line;
@@ -151,7 +205,7 @@ void plotRun(int runID, bool png, const std::string& name,
       if (!line.empty() && line.back() == '\r') line.pop_back();
       actual += line + '\n';
     }
-    if (!file.eof() || actual != makeScript(runID, config.matchesPerPlayer, series, savedPng))
+    if (!file.eof() || actual != makeScript(runID, config.matchesPerPlayer, series, savedPng, config.scenario, fixedReference, metrics))
       throw std::runtime_error("既存グラフの描画データ・条件がMSEと一致しません。--nameで別名を指定してください。");
     log << "再利用: グラフ " << output.string() << '\n';
     return;
@@ -162,16 +216,22 @@ void plotRun(int runID, bool png, const std::string& name,
   }
   try {
     std::ofstream script(output / "plot.gp");
-    script << makeScript(runID, config.matchesPerPlayer, series, png);
+    script << makeScript(runID, config.matchesPerPlayer, series, png, config.scenario, fixedReference, metrics);
     script.close();
     if (!script) throw std::runtime_error("描画スクリプトの保存に失敗しました。");
     runGnuplot(gnuplot, output);
     validateImage(output / "mse.svg", false);
     if (png) validateImage(output / "mse.png", true);
+    if (!metrics.empty()) for (const auto* stem : {"online_log_loss", "online_brier"}) {
+      validateImage(output / (std::string(stem) + ".svg"), false);
+      if (png) validateImage(output / (std::string(stem) + ".png"), true);
+    }
   } catch (...) {
     // この呼び出しで作成したものだけを削除し、無関係なファイルには触れない。
     std::error_code ignored;
     for (const auto* file : {"plot.gp", "mse.svg", "mse.png"}) fs::remove(output / file, ignored);
+    if (!metrics.empty()) for (const auto* file : {"online_log_loss.svg", "online_log_loss.png",
+          "online_brier.svg", "online_brier.png"}) fs::remove(output / file, ignored);
     fs::remove(output, ignored);
     throw;
   }
