@@ -25,6 +25,8 @@ add_library(project10_core
   src/ratings/ranked_glicko2.cpp
   src/simulation/run.cpp
   src/evaluation/MSE.cpp
+  src/evaluation/online.cpp
+  src/evaluation/reference.cpp
   src/ratings/trueskill.cpp
   src/evaluation/run.cpp
   src/evaluation/reuse.cpp
