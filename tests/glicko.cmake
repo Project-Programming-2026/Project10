@@ -14,9 +14,10 @@ string(JSON config SET "${config}" glicko
   "{\"initial_rating\": 1500, \"initial_rd\": 350, \"rd_growth\": 30}")
 file(WRITE "${work}/configs/run_0000/config.json" "${config}")
 
+# 4つ目以降の引数は、そのままプログラムの引数として渡す。
 function(invoke program input expected_error)
   file(WRITE "${work}/stdin.txt" "${input}")
-  execute_process(COMMAND "${program}" WORKING_DIRECTORY "${work}"
+  execute_process(COMMAND "${program}" ${ARGN} WORKING_DIRECTORY "${work}"
     INPUT_FILE "${work}/stdin.txt" RESULT_VARIABLE result
     OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 30)
   if(expected_error STREQUAL "")
@@ -28,10 +29,11 @@ function(invoke program input expected_error)
   endif()
 endfunction()
 
-# 失敗したときに、予測CSVもロックも残らないこと。
+# 失敗したときに、予測CSVも最終レートもロックも残らないこと。
 function(glicko_fails input expected_error)
   invoke("${PROGRAM}" "${input}" "${expected_error}")
-  if(EXISTS "${run}/glicko.csv" OR EXISTS "${work}/runs/.run_0000.lock")
+  if(EXISTS "${run}/glicko.csv" OR EXISTS "${run}/glicko_rating.csv" OR
+      EXISTS "${work}/runs/.run_0000.lock")
     message(FATAL_ERROR "失敗時に結果またはロックが残りました")
   endif()
 endfunction()
@@ -65,6 +67,11 @@ foreach(point 2 4 6)
   endforeach()
 endforeach()
 
+# 引数なし（一括実行と同じ呼び方）では、予測CSV以外のファイルを作らない。
+if(EXISTS "${run}/glicko_rating.csv")
+  message(FATAL_ERROR "引数なしで最終レートが作られました")
+endif()
+
 # 既存の予測CSVは上書きしない。同じ入力からは同じ予測CSVになる。
 file(SHA256 "${run}/glicko.csv" before)
 invoke("${PROGRAM}" "0\n" "出力先がすでに存在します")
@@ -73,11 +80,41 @@ if(NOT before STREQUAL after)
   message(FATAL_ERROR "既存の予測が変更されました")
 endif()
 file(REMOVE "${run}/glicko.csv")
-invoke("${PROGRAM}" "0\n" "")
+
+# --final-ratingsでは、同じ予測CSVに加えて、見出しと8人分の最終レートを書く。
+invoke("${PROGRAM}" "0\n" "" --final-ratings)
 file(SHA256 "${run}/glicko.csv" after)
 if(NOT before STREQUAL after)
   message(FATAL_ERROR "同じ入力から予測を再現できません")
 endif()
+file(STRINGS "${run}/glicko_rating.csv" ratings)
+list(POP_FRONT ratings rating_header)
+list(LENGTH ratings rating_count)
+if(NOT rating_header STREQUAL "rating" OR NOT rating_count EQUAL 8)
+  message(FATAL_ERROR "最終レートの見出しまたは行数が正しくありません: ${rating_header} ${rating_count}")
+endif()
+foreach(rating IN LISTS ratings)
+  if(NOT rating MATCHES "^[0-9]+(\\.[0-9]+)?$")
+    message(FATAL_ERROR "最終レートの行が正しくありません: ${rating}")
+  endif()
+endforeach()
+
+# 既存の最終レートも上書きせず、予測CSVだけを作ることもしない。同じ入力からは同じ値になる。
+file(SHA256 "${run}/glicko_rating.csv" rating_before)
+file(REMOVE "${run}/glicko.csv")
+invoke("${PROGRAM}" "0\n" "出力先がすでに存在します: .*glicko_rating\\.csv" --final-ratings)
+file(SHA256 "${run}/glicko_rating.csv" rating_after)
+if(EXISTS "${run}/glicko.csv" OR NOT rating_before STREQUAL rating_after)
+  message(FATAL_ERROR "既存の最終レートが変更されたか、予測CSVだけが作られました")
+endif()
+file(REMOVE "${run}/glicko_rating.csv")
+invoke("${PROGRAM}" "0\n" "" --final-ratings)
+file(SHA256 "${run}/glicko_rating.csv" rating_after)
+if(NOT rating_before STREQUAL rating_after)
+  message(FATAL_ERROR "同じ入力から最終レートを再現できません")
+endif()
+file(REMOVE "${run}/glicko_rating.csv")
+invoke("${PROGRAM}" "0\n" "使い方" --unknown)
 
 # 共通のMSE評価がそのまま読めること。
 file(RENAME "${work}/hidden/ground_truth.csv" "${run}/ground_truth.csv")

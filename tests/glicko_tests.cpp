@@ -235,7 +235,7 @@ void testWritePredictions() {
   // 生成器と同じ形式：4人・各4試合・1期間2試合。評価間隔2なので評価時点は2と4。
   const auto matches = generateMatches({0.0, 0.5, 1.0, 1.5}, 4, 2, 1.0, 3, 4);
   std::ostringstream output;
-  writeGlickoPredictions(output, 7, 4, 2, matches, 1500.0, 350.0, 20.0);
+  const auto finalStates = writeGlickoPredictions(output, 7, 4, 2, matches, 1500.0, 350.0, 20.0);
 
   // 期待値：期間ごとにupdateGlickoPeriodを適用し、各期間の終了時の状態から予測する。
   std::vector<std::string> expected = {
@@ -268,6 +268,12 @@ void testWritePredictions() {
     index++;
   }
   require(index == expected.size(), "Prediction CSV has missing rows");
+  // 戻り値は最後の期間の更新後の状態（glicko_rating.csvに書く値）。
+  require(finalStates.size() == states.size(), "Final states must cover all players");
+  for (std::size_t i = 0; i < states.size(); i++) {
+    require(finalStates[i].rating == states[i].rating && finalStates[i].rd == states[i].rd,
+            "Final states must be the states after the last period");
+  }
 
   // 1期間1試合・評価間隔2では、評価時点2・4の期間の終了時だけ書き、1・3では書かない。
   const auto oneMatchPeriods = generateMatches({0.0, 0.5, 1.0, 1.5}, 4, 1, 1.0, 3, 4);

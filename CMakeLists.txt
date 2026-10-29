@@ -29,6 +29,7 @@ add_library(project10_core
   src/evaluation/run.cpp
   src/evaluation/reuse.cpp
   src/ratings/glicko.cpp
+  src/ratings/ranked_glicko.cpp
   src/ratings/elo.cpp
   src/ratings/advantage_elo.cpp
 )
@@ -50,6 +51,8 @@ add_executable(project10_trueskill src/trueskill_main.cpp)
 target_link_libraries(project10_trueskill PRIVATE project10_core)
 add_executable(project10_glicko src/glicko_main.cpp)
 target_link_libraries(project10_glicko PRIVATE project10_core)
+add_executable(project10_ranked_glicko src/ranked_glicko_main.cpp)
+target_link_libraries(project10_ranked_glicko PRIVATE project10_core)
 add_library(project10_plotting src/evaluation/plot.cpp)
 target_link_libraries(project10_plotting PUBLIC project10_core)
 add_executable(project10_plot src/plot_main.cpp)
@@ -66,6 +69,7 @@ if(MSVC)
   target_compile_options(project10_evaluate PRIVATE /utf-8)
   target_compile_options(project10_trueskill PRIVATE /utf-8)
   target_compile_options(project10_glicko PRIVATE /utf-8)
+  target_compile_options(project10_ranked_glicko PRIVATE /utf-8)
   target_compile_options(project10_plotting PRIVATE /W4 /utf-8)
   target_compile_options(project10_plot PRIVATE /utf-8)
 else()
@@ -187,6 +191,21 @@ if(BUILD_TESTING)
       "-DSAMPLE_CONFIG=${CMAKE_CURRENT_SOURCE_DIR}/configs/run_0000/config.json"
       "-DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/test-work"
       -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/glicko.cmake"
+  )
+  add_executable(ranked_glicko_tests tests/ranked_glicko_tests.cpp)
+  target_link_libraries(ranked_glicko_tests PRIVATE project10_core)
+  if(MSVC)
+    target_compile_options(ranked_glicko_tests PRIVATE /utf-8)
+  endif()
+  add_test(NAME ranked_glicko_unit COMMAND ranked_glicko_tests)
+  add_test(NAME cli_ranked_glicko
+    COMMAND "${CMAKE_COMMAND}"
+      "-DPROGRAM=$<TARGET_FILE:project10_ranked_glicko>"
+      "-DGENERATOR=$<TARGET_FILE:project10>"
+      "-DSAMPLE_CONFIG=${CMAKE_CURRENT_SOURCE_DIR}/configs/run_0000/config.json"
+      "-DBASELINE=${CMAKE_CURRENT_SOURCE_DIR}/samples/ranked_glicko_baseline/glicko_rating.csv"
+      "-DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/test-work"
+      -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/ranked_glicko.cmake"
   )
   add_executable(elo_tests tests/elo_tests.cpp)
   target_link_libraries(elo_tests PRIVATE project10_core)
