@@ -58,7 +58,7 @@ set(run "${work}/runs/run_0000")
 file(READ "${run}/project10_run.json" marker)
 string(JSON mode GET "${marker}" mode)
 file(READ "${run}/graphs/plot.gp" script)
-if(NOT mode STREQUAL "six_method_fixed_reference_v1" OR NOT script MATCHES "fixed baseline; PR #28" OR
+if(NOT mode STREQUAL "six_method_fixed_reference_v1" OR NOT script MATCHES "MSE comparison [(]fixed baseline[)]" OR
     script MATCHES "smoke test only" OR
     NOT script MATCHES "Advantage-Elo" OR NOT script MATCHES "ranked Glicko-2" OR
     EXISTS "${work}/runs/.run_0000.lock")
