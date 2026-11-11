@@ -15,7 +15,7 @@ bool regularFile(const fs::path& path) {
   const auto status = fs::symlink_status(path);
   if (!fs::exists(status)) return false;
   if (!fs::is_regular_file(status))
-    throw std::runtime_error("再利用する成果物は通常ファイルが必要です: " + path.string());
+    throw std::runtime_error("再利用する成果物には、シンボリックリンクではない通常のファイルが必要です: " + path.string());
   return true;
 }
 }  // namespace
@@ -25,7 +25,7 @@ ReusePlan inspectReusableRun(int runID, const io::RunLock& lock, bool allMethods
   const auto run = fs::path("runs") / io::runDirectoryName(runID);
   lock.requirePath(run.parent_path() / ("." + run.filename().string() + ".lock"));
   if (fs::is_symlink(run) || !fs::is_directory(run))
-    throw std::runtime_error("再利用するrunは通常のディレクトリが必要です。");
+    throw std::runtime_error("再利用するrunの保存先には、シンボリックリンクではない既存のディレクトリが必要です。");
   for (const auto* name : {"project10_run.json", "config.json", "players.csv", "matches.csv",
                            "ground_truth.csv", "latent_parameters.csv"}) {
     if (!regularFile(run / name)) throw std::runtime_error("再利用に必要な成果物がありません: " + std::string(name));

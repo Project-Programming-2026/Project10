@@ -17,17 +17,17 @@ namespace {
 void require(bool ok, const char* message) {
   if (!ok) throw std::runtime_error(message);
 }
-void near(double a, double b) { require(std::abs(a - b) < 1e-12, "数値照合の失敗"); }
+void near(double a, double b) { require(std::abs(a - b) < 1e-12, "数値が許容誤差内で一致しません"); }
 template<class F> void rejects(F action) {
   bool failed = false;
   try { action(); } catch (const std::exception&) { failed = true; }
-  require(failed, "不正入力を受理しました");
+  require(failed, "不正な入力が受け付けられました");
 }
 void write(const fs::path& path, const std::string& text) { std::ofstream(path) << text; }
 }
 int main(int argc, char** argv) {
   try {
-    require(argc == 2, "作業先が必要です");
+    require(argc == 2, "テスト用の作業ディレクトリを指定してください");
     const fs::path root(argv[1]);
     fs::create_directories(root);
     // Phi(1/sqrt(2))。側を反転してプレイヤーを交換すると補数になる。
@@ -35,7 +35,7 @@ int main(int argc, char** argv) {
     near(calculateConditionalWinProbability(2, -1, 1, 1, 1) +
          calculateConditionalWinProbability(-1, 2, 1, 1, -1), 1);
     require(calculateConditionalWinProbability(1, 2, 1, 0, -1) ==
-            calculateWinProbability(1, 2, 1), "S0の元の計算が変わりました");
+            calculateWinProbability(1, 2, 1), "S0の勝率が従来の計算結果と一致しません");
     rejects([] { calculateConditionalWinProbability(0, 0, 1, -1, 1); });
     rejects([] { calculateConditionalWinProbability(0, 0, 1, 1, 2); });
     rejects([] { calculateConditionalWinProbability(0, 0, 1,
@@ -47,11 +47,11 @@ int main(int argc, char** argv) {
     const auto repeated = generateMatches(abilities, 20, 10, 1, 2, 3, 1, 5, true);
     for (std::size_t i = 0; i < old.size(); ++i) {
       require(old[i].playerA == zero[i].playerA && old[i].playerB == zero[i].playerB &&
-              old[i].resultA == zero[i].resultA, "S0履歴の互換性がありません");
+              old[i].resultA == zero[i].resultA, "S0の対戦履歴が従来の生成結果と一致しません");
       require(old[i].playerA == other[i].playerA && old[i].playerB == other[i].playerB,
-              "条件がマッチング用乱数に影響しました");
+              "条件を変更すると、対戦の組み合わせも変わりました");
       require(other[i].resultA == repeated[i].resultA && other[i].condition == repeated[i].condition,
-              "条件・勝敗の再現性がありません");
+              "同じ設定とシードで条件・勝敗を再現できませんでした");
     }
     const auto conditions = root / "conditions.csv";
     for (const auto* text : {"match_id,z\n0,1\n", "match_id,z\n0,1\n0,-1\n",
@@ -95,7 +95,7 @@ int main(int argc, char** argv) {
     write(log, logHeader + "0,0,1,1,0,1\n0,1,-1,0,1,0\n");
     const auto edge = ev::calculateOnlineMetrics(log.string(), 0, matches, 2, 1).back();
     near(edge.eloBrier, 1); near(edge.advantageBrier, 0);
-    require(std::isfinite(edge.eloLogLoss), "Log Lossの端点が非有限です");
+    require(std::isfinite(edge.eloLogLoss), "予測確率が0または1のとき、Log Lossが有限値になりません");
 
     // 初回予測は更新前: initialAdvantage=400ならz=+1で10/11、z=-1で1/11。
     for (const int z : {1, -1}) {
