@@ -24,7 +24,7 @@ int main(int argc, char** argv) {
     if (algorithm != "Elo" && algorithm != "Glicko2" && algorithm != "rankedGlicko2" &&
         algorithm != "AdvantageElo") throw std::invalid_argument("未対応の手法名です。");
     const auto dir = fs::path("runs") / project10::io::runDirectoryName(runID);
-    if (fs::is_symlink(dir) || !fs::is_directory(dir)) throw std::runtime_error("通常のrunが必要です。");
+    if (fs::is_symlink(dir) || !fs::is_directory(dir)) throw std::runtime_error("runの保存先には、シンボリックリンクではない既存のディレクトリが必要です。");
     const project10::io::RunLock lock(fs::path("runs") / ("." + dir.filename().string() + ".lock"));
     const auto config = project10::io::loadRatingConfig(runID, algorithm);
     const auto output = dir / config.predictionsFile;
@@ -37,18 +37,18 @@ int main(int argc, char** argv) {
       if (fs::is_symlink("samples") || fs::is_symlink(baseline) ||
           !fs::is_regular_file(fs::symlink_status(baseline / "glicko2_rating.csv")))
         throw std::runtime_error("rankedGlicko2には通常ファイルのsamples/glicko_baseline/glicko2_rating.csvが必要です。");
-      // 参照人数は評価人数と独立。固定分布の設定がある場合は、その人数で完全性を検査。
-      // 隔離作業先では親が検証済みのCSVのみを渡す。
+      // 参照分布の人数は評価人数と異なってよい。設定がある場合は、設定人数とCSVの件数を照合する。
+      // 推定器用の作業先には、親プロセスが検証したCSVだけを渡す。
       if (fs::exists(baseline / "config.json")) {
         if (!fs::is_regular_file(fs::symlink_status(baseline / "config.json")))
-          throw std::runtime_error("固定参照の設定は通常ファイルが必要です。");
+          throw std::runtime_error("固定参照の設定には、シンボリックリンクではない通常のファイルを指定してください。");
         const auto source = project10::io::loadSimulationConfigFile(baseline / "config.json");
         project10::io::readGlicko2RatingsCsv((baseline / "glicko2_rating.csv").string(), source.numPlayers);
       } else project10::io::readGlicko2RatingsCsv((baseline / "glicko2_rating.csv").string(), 0);
     }
     if ((algorithm == "Glicko2" || algorithm == "rankedGlicko2") && (config.period != 10 || config.interval != 10 ||
                                    config.matchesPerPlayer % 10 != 0)) {
-      throw std::runtime_error("Glicko2、rankedGlicko2は期間・評価間隔10、総対戦数は10の倍数に限定しています。");
+      throw std::runtime_error("Glicko2とrankedGlicko2では、更新期間と評価間隔を1人当たり10試合、1人当たりの総対戦数を10の倍数に設定してください。");
     }
     project10::io::validatePlayersCsv((dir / "players.csv").string(), config.numPlayers);
     auto matches = project10::io::readMatchesCsv(
