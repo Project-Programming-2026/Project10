@@ -70,7 +70,7 @@ std::string makeScript(int runID, int maximum, const std::vector<MseSeries>& ser
   }
   script << "set encoding utf8\nset title 'Run " << runID << " - MSE comparison"
          << (scenario.empty() ? "" : " (" + scenario + "; conditional, both sides)")
-         << (fixedReference ? " (fixed baseline; PR #28)" : "")
+         << (fixedReference ? " (fixed baseline)" : "")
          << (smoke ? " (same-run final reference; smoke test only)" : "") << "'\n"
          << "set xlabel 'Cumulative matches per player'\nset ylabel 'MSE'\n"
          << "set xrange [0:" << maximum << "]\nset yrange [0:"

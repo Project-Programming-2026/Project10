@@ -5,7 +5,7 @@
 
 namespace project10::evaluation {
 struct ReferenceData { std::string config, ratings; };
-// PR #28以前の保存済み成果物を描画するときの検査。
+// 参照用runを個別に指定した旧方式の成果物について、描画前に保存済み参照データを検証する。
 void validateSavedReference(const io::SimulationConfig& target, int referenceRun);
 std::filesystem::path referenceDirectory(int targetRun, int referenceRun);
 // samples/glicko_baselineの固定分布。元ファイルを変更せず、使用した設定・レートをrun内に保存する。
