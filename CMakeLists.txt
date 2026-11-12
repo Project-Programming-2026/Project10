@@ -29,6 +29,7 @@ add_library(project10_core
   src/evaluation/reference.cpp
   src/ratings/trueskill.cpp
   src/evaluation/run.cpp
+  src/evaluation/files.cpp
   src/evaluation/reuse.cpp
   src/ratings/glicko.cpp
   src/ratings/elo.cpp
@@ -77,6 +78,20 @@ endif()
 include(CTest)
 if(BUILD_TESTING)
   find_program(PROJECT10_GNUPLOT NAMES gnuplot gnuplot-nox)
+  add_executable(file_series_tests tests/file_series_tests.cpp)
+  target_link_libraries(file_series_tests PRIVATE project10_plotting nlohmann_json::nlohmann_json)
+  if(MSVC)
+    target_compile_options(file_series_tests PRIVATE /utf-8)
+  endif()
+  add_test(NAME file_series_contract COMMAND file_series_tests
+    "${CMAKE_CURRENT_BINARY_DIR}/test-work/file-series-contract" "$<TARGET_FILE:plot_renderer_stub>" contract)
+  add_test(NAME file_series_cli COMMAND "${CMAKE_COMMAND}"
+    "-DEVALUATOR=$<TARGET_FILE:project10_evaluate>" "-DPLOTTER=$<TARGET_FILE:project10_plot>"
+    "-DRENDERER=$<TARGET_FILE:plot_renderer_stub>" "-DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/test-work"
+    -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/file_series.cmake")
+  add_test(NAME file_series_render COMMAND file_series_tests
+    "${CMAKE_CURRENT_BINARY_DIR}/test-work/file-series-render" "${PROJECT10_GNUPLOT}" render)
+  set_tests_properties(file_series_render PROPERTIES SKIP_RETURN_CODE 77)
   add_executable(comparison_tests tests/comparison_tests.cpp)
   target_link_libraries(comparison_tests PRIVATE project10_core)
   if(MSVC)

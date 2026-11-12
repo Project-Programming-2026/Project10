@@ -42,6 +42,19 @@ struct EvaluationConfig {
   bool conditional = false;
 };
 
+// 手法・予測ファイル名に依存しない、保存済みrunの評価条件。
+struct EvaluationContext {
+  int runID;
+  int numPlayers;
+  int matchesPerPlayer;
+  int interval;
+  bool conditional;
+  std::string scenario;
+  std::string sourceText;
+};
+
+EvaluationContext loadEvaluationContext(int runID);
+
 struct RatingConfig {
   int numPlayers;
   int matchesPerPlayer;

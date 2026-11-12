@@ -1,4 +1,5 @@
 #include "project10/evaluation/run.hpp"
+#include "project10/evaluation/files.hpp"
 
 #include <filesystem>
 #include <iostream>
@@ -9,8 +10,21 @@
 
 namespace fs = std::filesystem;
 
-int main() {
+int main(int argc, char** argv) {
   try {
+    const auto options = project10::evaluation::parseFileOptions(argc, argv, false);
+    if (options.help) {
+      std::cout << "project10_evaluate\n"
+                << "  引数なし: run IDと手法名を標準入力から読みます。\n"
+                << "project10_evaluate --input label run_ID CSV [--input ...] --name name\n"
+                << "  任意の予測CSVを評価し、runs/comparisons/name/へ保存します。上書きしません。\n";
+      return 0;
+    }
+    if (!options.inputs.empty()) {
+      const auto output = project10::evaluation::evaluateFiles(options.inputs, options.name, options.arguments);
+      std::cout << "MSE output: " << output.string() << '\n';
+      return 0;
+    }
     int runID;
     std::string input;
     std::cout << "Enter run ID: ";
