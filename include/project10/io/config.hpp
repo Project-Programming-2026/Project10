@@ -4,6 +4,8 @@
 #include <filesystem>
 #include <map>
 #include <string>
+#include <vector>
+#include "project10/ratings/advantage_elo.hpp"
 
 namespace project10::io {
 
@@ -24,6 +26,10 @@ struct SimulationConfig {
   std::uint64_t matchingSeed;
   std::uint64_t resultSeed;
   std::string matchesFile;
+  bool conditional = false;
+  std::string scenario;
+  double sideAdvantage = 0;
+  std::uint64_t conditionSeed = 0;
 };
 
 struct EvaluationConfig {
@@ -33,6 +39,7 @@ struct EvaluationConfig {
   int interval;
   std::string predictionsFile;
   std::string mseFile;
+  bool conditional = false;
 };
 
 struct RatingConfig {
@@ -41,6 +48,7 @@ struct RatingConfig {
   int interval;
   int period;
   std::string predictionsFile;
+  bool conditional = false;
 };
 
 RatingConfig loadTrueSkillConfig(int runID);
@@ -67,6 +75,7 @@ struct PlotConfig {
   int matchesPerPlayer;
   int interval;
   std::map<std::string, std::string> mseFiles;
+  std::string scenario;
 };
 
 // 描画には正解情報や予測CSVを必要としない。
@@ -74,8 +83,14 @@ PlotConfig loadPlotConfig(int runID, const std::filesystem::path& root = "runs")
 
 std::string runDirectoryName(int runID);
 SimulationConfig loadConfig(int runID, const std::filesystem::path& root = "configs");
+SimulationConfig loadSimulationConfigFile(const std::filesystem::path& path);
+bool isFixedReferenceRun(int runID);
 // 作成元マーカーと、現在の設定・保存済み設定の意味上の一致を検査する。
-void validateRunSnapshot(int runID);
+void validateRunSnapshot(int runID, bool allMethods = false, bool comparison = false, int referenceRun = -1);
+std::vector<std::string> ratingMethods(bool allMethods = false, bool ranked = true);
+ratings::AdvantageEloParameters loadAdvantageParameters(int runID, const std::filesystem::path& root = "runs");
+void writeRatingSnapshot(int runID, const std::filesystem::path& directory);
+int comparisonReferenceRun(int runID);
 void writeConfigSnapshot(
   const SimulationConfig& config,
   const std::filesystem::path& outputDir

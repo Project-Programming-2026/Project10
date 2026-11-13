@@ -9,6 +9,7 @@ struct Match {
   int playerA;
   int playerB;
   int resultA;
+  int condition = 1;  // z=+1: Aが先手、z=-1: Bが先手。CSVでは別ファイルへ保存。
 };
 
 // parametersの添字がプレイヤーID。偶数人数・正の試合数と期間に限定する。
@@ -20,5 +21,6 @@ std::vector<Match> generateMatches(
   int ratingPeriodMatchesPerPlayer,
   double performanceStd,
   std::uint64_t matchingSeed,
-  std::uint64_t resultSeed
+  std::uint64_t resultSeed,
+  double sideAdvantage = 0, std::uint64_t conditionSeed = 0, bool conditional = false
 );

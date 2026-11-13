@@ -114,17 +114,19 @@ std::string runDirectoryName(int runID) {
 
 // JSON読み込みの参考資料と採用範囲はdocs/references.mdを参照。
 SimulationConfig loadConfig(int runID, const std::filesystem::path& root) {
+  auto settings = loadSimulationConfigFile(root / runDirectoryName(runID) / "config.json");
+  if (settings.runID != runID) throw std::runtime_error("Run ID mismatch.");
+  return settings;
+}
+
+SimulationConfig loadSimulationConfigFile(const std::filesystem::path& configPath) {
   // 1. 対象の設定を読み込み、元のJSON全文を保持したまま解析する。
-  const auto configPath = root / runDirectoryName(runID) / "config.json";
   SimulationConfig settings{};
   settings.sourceText = readConfigText(configPath);
   const auto config = parseConfig(settings.sourceText);
 
   // 2. 実験IDと人数を確認する。必須項目はatで取得し、欠落時は例外にする。
   settings.runID = readInteger(config, "run_id", 0);
-  if (settings.runID != runID) {
-    throw std::runtime_error("Run ID mismatch.");
-  }
   settings.numPlayers = readInteger(config, "num_players", 2);
   if (settings.numPlayers % 2 != 0) {
     throw std::runtime_error("num_players must be even for round matching.");
@@ -155,6 +157,17 @@ SimulationConfig loadConfig(int runID, const std::filesystem::path& root) {
   settings.abilitySeed = readNonNegativeInteger(seeds, "ability");
   settings.matchingSeed = readNonNegativeInteger(seeds, "matching");
   settings.resultSeed = readNonNegativeInteger(seeds, "result");
+  if (config.contains("comparison")) {
+    const auto& comparison = config.at("comparison");
+    settings.conditional = true;
+    settings.scenario = comparison.at("scenario").get<std::string>();
+    settings.sideAdvantage = readFiniteNumber(comparison, "side_advantage");
+    settings.conditionSeed = readNonNegativeInteger(comparison, "condition_seed");
+    if ((settings.scenario != "S0" && settings.scenario != "S1") ||
+        settings.sideAdvantage < 0 || (settings.scenario == "S0" && settings.sideAdvantage != 0) ||
+        (settings.scenario == "S1" && settings.sideAdvantage <= 0))
+      throw std::runtime_error("比較条件S0/S1とside_advantageが一致しません。");
+  }
 
   // 5. 出力先のファイル名を取得し、現在のCSV仕様と一致することを確認する。
   const auto& files = config.at("files");
@@ -171,18 +184,44 @@ SimulationConfig loadConfig(int runID, const std::filesystem::path& root) {
   return settings;
 }
 
-void validateRunSnapshot(int runID) {
+std::vector<std::string> ratingMethods(bool allMethods, bool ranked) {
+  std::vector<std::string> methods{"Elo", "Glicko", "Glicko2", "TrueSkill"};
+  if (allMethods) methods.insert(methods.end(), {"AdvantageElo", "rankedGlicko2"});
+  if (allMethods && !ranked) methods.pop_back();
+  return methods;
+}
+
+void validateRunSnapshot(int runID, bool allMethods, bool comparison, int referenceRun) {
   const auto run = std::filesystem::path("runs") / runDirectoryName(runID);
   const auto marker = parseConfig(readConfigText(run / "project10_run.json"));
   if (readInteger(marker, "schema_version", 1) != 1 ||
       marker.at("producer") != "project10_run" || readInteger(marker, "run_id", 0) != runID) {
     throw std::runtime_error("runの識別マーカーが一致しません。");
   }
+  if (marker.value("mode", std::string{}) !=
+        (comparison ? (allMethods ? "conditional_fixed_reference_v1" : "conditional_comparison_v1") :
+          allMethods ? "six_method_fixed_reference_v1" : "") ||
+      (comparison && marker.value("ranked_reference_run", -1) != referenceRun))
+    throw std::runtime_error("runの実行モードが一致しません。6手法は専用の新しいrunを使用してください。");
   const auto current = loadConfig(runID);
   const auto saved = loadConfig(runID, "runs");
   if (parseConfig(current.sourceText) != parseConfig(saved.sourceText)) {
     throw std::runtime_error("保存済み設定と現在の設定が一致しません。");
   }
+}
+
+bool isFixedReferenceRun(int runID) {
+  const auto path = std::filesystem::path("runs") / runDirectoryName(runID) / "project10_run.json";
+  if (!std::filesystem::exists(std::filesystem::symlink_status(path))) return false;
+  if (!std::filesystem::is_regular_file(std::filesystem::symlink_status(path)))
+    throw std::runtime_error("runマーカーは通常ファイルが必要です。");
+  const auto marker = parseConfig(readConfigText(path));
+  const auto mode = marker.value("mode", std::string{});
+  if (mode != "six_method_fixed_reference_v1" && mode != "conditional_fixed_reference_v1") return false;
+  if (marker.at("producer") != "project10_run" || readInteger(marker, "run_id", 0) != runID ||
+      readInteger(marker, "schema_version", 1) != 1)
+    throw std::runtime_error("固定参照のrunマーカーが不正です。");
+  return true;
 }
 
 RatingConfig loadTrueSkillConfig(int runID) {
@@ -213,7 +252,8 @@ RatingConfig loadRatingConfig(int runID, const std::string& algorithm,
     throw std::runtime_error("予測用のmatchesファイル名が規定と一致していません。");
   }
   return {evaluation.numPlayers, evaluation.matchesPerPlayer, evaluation.interval,
-          readInteger(config, "rating_period_matches_per_player", 1), evaluation.predictionsFile};
+          readInteger(config, "rating_period_matches_per_player", 1), evaluation.predictionsFile,
+          evaluation.conditional};
 }
 
 GlickoConfig loadGlickoConfig(int runID, const std::filesystem::path& root) {
@@ -263,6 +303,7 @@ EvaluationConfig loadEvaluationConfig(int runID, const std::string& algorithm,
   else if (algorithm == "Glicko") stem = "glicko";
   else if (algorithm == "Glicko2") stem = "glicko2";
   else if (algorithm == "rankedGlicko2") stem = "ranked_glicko2";
+  else if (algorithm == "AdvantageElo") stem = "advantage_elo";
   else if (algorithm == "TrueSkill") stem = "trueskill";
   else throw std::invalid_argument("未対応の手法名です: " + algorithm);
 
@@ -274,6 +315,7 @@ EvaluationConfig loadEvaluationConfig(int runID, const std::string& algorithm,
     settings.numPlayers = readInteger(config, "num_players", 2);
     settings.matchesPerPlayer = readInteger(config, "matches_per_player", 1);
     settings.interval = readInteger(config, "evaluation_interval_matches_per_player", 1);
+    settings.conditional = config.contains("comparison");
     if (settings.runID != runID || settings.numPlayers % 2 != 0 ||
         settings.matchesPerPlayer < settings.interval) {
       throw std::runtime_error("評価設定が不正か、run IDが一致していません。");
@@ -302,13 +344,19 @@ PlotConfig loadPlotConfig(int runID, const std::filesystem::path& root) {
     const auto config = parseConfig(readConfigText(path));
     PlotConfig result{readInteger(config, "run_id", 0),
                       readInteger(config, "matches_per_player", 1),
-                      readInteger(config, "evaluation_interval_matches_per_player", 1), {}};
+                      readInteger(config, "evaluation_interval_matches_per_player", 1), {}, {}};
     if (result.runID != runID || result.matchesPerPlayer < result.interval) {
       throw std::runtime_error("描画設定が不正か、run IDが一致していません。");
     }
+    if (config.contains("comparison")) {
+      result.scenario = config.at("comparison").at("scenario").get<std::string>();
+      if (result.scenario != "S0" && result.scenario != "S1")
+        throw std::runtime_error("比較シナリオはS0またはS1を指定してください。");
+    }
     const auto& files = config.at("files").at("mse");
     if (!files.is_object()) throw std::runtime_error("files.mseはオブジェクトで指定してください。");
-    const std::set<std::string> algorithms{"Elo", "Glicko", "Glicko2", "rankedGlicko2", "TrueSkill"};
+    const auto methods = ratingMethods(true);
+    const std::set<std::string> algorithms(methods.begin(), methods.end());
     std::set<std::string> names;
     for (const auto& item : files.items()) {
       if (algorithms.count(item.key()) == 0) {
@@ -330,6 +378,40 @@ PlotConfig loadPlotConfig(int runID, const std::filesystem::path& root) {
   } catch (const json::exception&) {
     throw std::runtime_error("描画用の設定JSONの構文・必須項目・型を確認してください: " + path.string());
   }
+}
+
+ratings::AdvantageEloParameters loadAdvantageParameters(int runID, const std::filesystem::path& root) {
+  const auto config = parseConfig(readConfigText(root / runDirectoryName(runID) / "config.json"));
+  ratings::AdvantageEloParameters result;
+  if (config.contains("advantage_elo")) {
+    result.initialAdvantage = readFiniteNumber(config.at("advantage_elo"), "initial_advantage");
+    result.kAdvantage = readFiniteNumber(config.at("advantage_elo"), "k_advantage");
+  } else if (config.contains("comparison")) {
+    throw std::runtime_error("比較にはadvantage_eloの初期値・学習率を明示してください。");
+  }
+  const ratings::AdvantageEloRating validate(2, result);
+  return result;
+}
+
+void writeRatingSnapshot(int runID, const std::filesystem::path& directory) {
+  auto config = parseConfig(readConfigText(std::filesystem::path("runs") / runDirectoryName(runID) / "config.json"));
+  for (const auto* field : {"seeds", "ability_distribution", "performance_std"}) config.erase(field);
+  if (config.contains("comparison")) {
+    config["comparison"].erase("side_advantage");
+    config["comparison"].erase("condition_seed");
+  }
+  std::ofstream file(directory / "config.json", std::ios::binary);
+  file << config.dump(2) << '\n'; file.close();
+  if (!file) throw std::runtime_error("推定器用設定を保存できません。");
+}
+
+int comparisonReferenceRun(int runID) {
+  const auto marker = parseConfig(readConfigText(std::filesystem::path("runs") /
+    runDirectoryName(runID) / "project10_run.json"));
+  if (marker.at("mode") != "conditional_comparison_v1" || marker.at("producer") != "project10_run" ||
+      readInteger(marker, "schema_version", 1) != 1 || readInteger(marker, "run_id", 0) != runID)
+    throw std::runtime_error("独立参照の比較モードを確認できません。");
+  return readInteger(marker, "ranked_reference_run", 0);
 }
 
 void writeConfigSnapshot(

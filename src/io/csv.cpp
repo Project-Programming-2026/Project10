@@ -67,7 +67,7 @@ void writeLatentParameters(
 void writeGroundTruth(
   const std::vector<double>& parameters,
   double performanceStd,
-  const std::string& outputPath
+  const std::string& outputPath, double sideAdvantage, int condition
 ) {
   std::ofstream file(outputPath);
 
@@ -85,10 +85,10 @@ void writeGroundTruth(
   // 自己対戦を除外しつつ、逆順の組み合わせも除外するようなループを回す
   for (std::size_t i = 0; i < parameters.size(); i++) {
     for (std::size_t j = i + 1; j < parameters.size(); j++) {
-      const double probability = calculateWinProbability(
+      const double probability = calculateConditionalWinProbability(
         parameters[i],
         parameters[j],
-        performanceStd
+        performanceStd, sideAdvantage, condition
       );
 
       file << i << ',' << j << ','
@@ -255,9 +255,14 @@ evaluation::ProbabilityMatrix readGroundTruthCsv(const std::string& path, int nu
 }
 
 void readPredictionsCsv(const std::string& path, evaluation::MseEvaluator& evaluator) {
+  consumePredictionsCsv(path, [&](const auto& row) { evaluator.addPrediction(row); });
+}
+
+void consumePredictionsCsv(const std::string& path,
+  const std::function<void(const evaluation::PredictionRow&)>& consume) {
   readCsv(path, "run_id,matches_per_player,player_a,player_b,predicted_p_a_wins", 5,
           [&](const auto& fields) {
-    evaluator.addPrediction({integer(fields[0]), integer(fields[1]), integer(fields[2]),
+    consume({integer(fields[0]), integer(fields[1]), integer(fields[2]),
                              integer(fields[3]), probability(fields[4])});
   });
 }
@@ -286,6 +291,87 @@ std::vector<evaluation::MseResult> readMseCsv(
   std::vector<evaluation::MseResult> results;
   for (const auto& point : points) results.push_back({point.first, point.second});
   return results;
+}
+
+namespace {
+int side(const std::string& value) {
+  if (value != "1" && value != "-1") throw std::invalid_argument("条件zは1または-1が必要です。");
+  return value == "1" ? 1 : -1;
+}
+}
+
+void writeConditions(const std::vector<Match>& matches, const std::string& path) {
+  std::ofstream file(path);
+  file << "match_id,z\n";
+  for (const auto& match : matches) file << match.matchID << ',' << match.condition << '\n';
+  file.close();
+  if (!file) throw std::runtime_error("条件CSVを保存できません。");
+}
+
+void readConditionsCsv(const std::string& path, std::vector<Match>& matches) {
+  std::vector<bool> seen(matches.size(), false);
+  std::size_t count = 0;
+  readCsv(path, "match_id,z", 2, [&](const auto& fields) {
+    const auto id = integer<std::uint64_t>(fields[0]);
+    if (id >= matches.size() || seen[id]) throw std::invalid_argument("条件の対戦IDが不正か重複しています。");
+    matches[id].condition = side(fields[1]); seen[id] = true; ++count;
+  });
+  if (count != matches.size()) throw std::runtime_error("条件CSVに欠落があります。");
+}
+
+void readConditionalPredictionsCsv(const std::string& path,
+  evaluation::MseEvaluator& positive, evaluation::MseEvaluator& negative) {
+  readCsv(path, "run_id,matches_per_player,player_a,player_b,z,predicted_p_a_wins", 6,
+    [&](const auto& fields) {
+      const evaluation::PredictionRow row{integer(fields[0]), integer(fields[1]),
+        integer(fields[2]), integer(fields[3]), probability(fields[5])};
+      (side(fields[4]) == 1 ? positive : negative).addPrediction(row);
+    });
+}
+
+void readOnlinePredictionsCsv(const std::string& path,
+  const std::function<void(const evaluation::OnlinePrediction&)>& consume) {
+  readCsv(path, "run_id,match_id,z,result_a,p_elo,p_advantage", 6, [&](const auto& fields) {
+    const int result = integer(fields[3]);
+    if (result > 1) throw std::invalid_argument("勝敗は0または1が必要です。");
+    consume({integer(fields[0]), integer<std::uint64_t>(fields[1]), side(fields[2]),
+             result, probability(fields[4]), probability(fields[5])});
+  });
+}
+
+std::vector<evaluation::OnlineMetrics> readOnlineMetricsCsv(const std::string& path,
+  int runID, int matchesPerPlayer, int interval) {
+  if (interval <= 0 || matchesPerPlayer < interval) throw std::invalid_argument("評価間隔が不正です。");
+  std::map<int, evaluation::OnlineMetrics> points;
+  readCsv(path, "run_id,matches_per_player,elo_log_loss,advantage_log_loss,elo_brier,advantage_brier", 6,
+    [&](const auto& fields) {
+      const int point = integer(fields[1]);
+      const double elo = finiteValue(fields[2]), adv = finiteValue(fields[3]);
+      if (integer(fields[0]) != runID || point <= 0 || point > matchesPerPlayer ||
+          point % interval != 0 || elo < 0 || adv < 0 ||
+          !points.emplace(point, evaluation::OnlineMetrics{point, elo, adv,
+            probability(fields[4]), probability(fields[5])}).second)
+        throw std::invalid_argument("試合前評価のrun ID・時点・値が不正です。");
+    });
+  if (points.size() != static_cast<std::size_t>(matchesPerPlayer / interval))
+    throw std::runtime_error("試合前評価の時点が不足しています。");
+  std::vector<evaluation::OnlineMetrics> result;
+  for (const auto& point : points) result.push_back(point.second);
+  return result;
+}
+
+void writeOnlineMetricsCsv(const std::string& path, int runID,
+  const std::vector<evaluation::OnlineMetrics>& metrics) {
+  if (std::filesystem::exists(std::filesystem::symlink_status(path)))
+    throw std::runtime_error("試合前評価の出力先がすでに存在します。");
+  std::ofstream file(path);
+  file.imbue(std::locale::classic());
+  file << "run_id,matches_per_player,elo_log_loss,advantage_log_loss,elo_brier,advantage_brier\n"
+       << std::setprecision(std::numeric_limits<double>::max_digits10);
+  for (const auto& row : metrics) file << runID << ',' << row.matchesPerPlayer << ',' <<
+    row.eloLogLoss << ',' << row.advantageLogLoss << ',' << row.eloBrier << ',' << row.advantageBrier << '\n';
+  file.close();
+  if (!file) throw std::runtime_error("試合前評価を書き込めません。");
 }
 
 void writeMseCsv(
@@ -320,13 +406,26 @@ void publishMseCsv(const std::string& temporaryPath, const std::string& outputPa
   }
 }
 
-void writeEloPredictions(
+std::vector<double> readGlicko2RatingsCsv(const std::string& path, int numPlayers) {
+  std::vector<double> ratings;
+  readCsv(path, "rating", 1, [&](const auto& fields) {
+    ratings.push_back(finiteValue(fields[0]));
+  });
+  if (numPlayers < 0 || numPlayers == 1 || ratings.size() < 2 ||
+      (numPlayers != 0 && ratings.size() != static_cast<std::size_t>(numPlayers)))
+    throw std::runtime_error("Glicko2の最終レート数が人数と一致しません。");
+  return ratings;
+}
+
+namespace {
+template<class Estimator, class Update, class Predict>
+void writeOnlinePredictions(
   int runID,
   const std::vector<int>& players,
   const std::vector<Match>& matches,
   int evaluationIntervalMatchesPerPlayer,
   const std::string& outputPath,
-  const ratings::EloParameters& params
+  Estimator elo, Update update, Predict predict, bool conditional = false
 ) {
   if (runID < 0 || evaluationIntervalMatchesPerPlayer <= 0 || players.empty()) {
     throw std::invalid_argument("Invalid arguments for writeEloPredictions");
@@ -343,9 +442,6 @@ void writeEloPredictions(
   const int totalPlayers = static_cast<int>(players.size());
   const int matchesPerRound = totalPlayers / 2;
 
-  // Elo計算機を用意
-  ratings::EloRating elo(players, params);
-
   // 排他制御用のロックディレクトリを作成し、その内部の一時ファイルへ書き込む
   const std::filesystem::path lockDir(outputPath + ".lock");
   const RunLock lock(lockDir);
@@ -358,11 +454,12 @@ void writeEloPredictions(
     }
 
     file.imbue(std::locale::classic());
-    file << "run_id,matches_per_player,player_a,player_b,predicted_p_a_wins\n";
+    file << "run_id,matches_per_player,player_a,player_b,"
+         << (conditional ? "z," : "") << "predicted_p_a_wins\n";
     file << std::setprecision(std::numeric_limits<double>::max_digits10);
 
     for (std::size_t i = 0; i < matches.size(); ++i) {
-      elo.updateMatch(matches[i]);
+      update(elo, matches[i]);
 
       // ラウンド完了の判定
       if ((i + 1) % matchesPerRound == 0) {
@@ -379,11 +476,15 @@ void writeEloPredictions(
           // 全ペアの勝率を出力
           for (int a = 0; a < totalPlayers; ++a) {
             for (int b = a + 1; b < totalPlayers; ++b) {
-              file << runID << ','
-                   << currentMatches << ','
-                   << a << ','
-                   << b << ','
-                   << elo.predictWinProbability(a, b) << '\n';
+              for (int sideIndex = 0; sideIndex < (conditional ? 2 : 1); ++sideIndex) {
+                const int z = conditional ? (sideIndex == 0 ? 1 : -1) : 0;
+                file << runID << ','
+                     << currentMatches << ','
+                     << a << ','
+                     << b << ',';
+                if (conditional) file << z << ',';
+                file << predict(elo, a, b, z) << '\n';
+              }
             }
           }
         }
@@ -424,6 +525,42 @@ void writeEloPredictions(
 
   std::error_code cleanupError;
   std::filesystem::remove(tmpPath, cleanupError);
+}
+
+}  // namespace
+
+void writeEloPredictions(int runID, const std::vector<int>& players,
+  const std::vector<Match>& matches, int interval, const std::string& path,
+  const ratings::EloParameters& params) {
+  writeOnlinePredictions(runID, players, matches, interval, path,
+    ratings::EloRating(players, params),
+    [](auto& rating, const Match& match) { rating.updateMatch(match); },
+    [](const auto& rating, int a, int b, int) { return rating.predictWinProbability(a, b); });
+}
+
+void writeAdvantageEloPredictions(int runID, const std::vector<int>& players,
+  const std::vector<Match>& matches, int interval, const std::string& path,
+  const ratings::AdvantageEloParameters& params, bool conditional, std::ostream* onlineLog) {
+  if (onlineLog) *onlineLog << "run_id,match_id,z,result_a,p_elo,p_advantage\n"
+    << std::setprecision(std::numeric_limits<double>::max_digits10);
+  writeOnlinePredictions(runID, players, matches, interval, path,
+    ratings::AdvantageEloRating(players, params),
+    [onlineLog, runID, baseline = ratings::EloRating(players,
+       {params.initialRating, params.kFactor, params.scale})](auto& rating, const Match& match) mutable {
+      if (onlineLog) {
+        *onlineLog << runID << ',' << match.matchID << ',' << match.condition << ',' << match.resultA
+          << ',' << baseline.predictWinProbability(match.playerA, match.playerB)
+          << ',' << rating.predictWinProbability(match.playerA, match.playerB, match.condition) << '\n';
+        baseline.updateMatch(match);
+      }
+      rating.updateMatch(match, match.condition);
+    },
+    [](const auto& rating, int a, int b, int z) {
+      if (z != 0) return rating.predictWinProbability(a, b, z);
+      return 0.5 * (rating.predictWinProbability(a, b, 1) +
+                    rating.predictWinProbability(a, b, -1));
+    }, conditional);
+  if (onlineLog && !*onlineLog) throw std::runtime_error("試合前予測ログを書き込めません。");
 }
 
 }  // namespace project10::io

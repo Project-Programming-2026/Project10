@@ -25,7 +25,8 @@ std::optional<GenerationResult> generateRun(int runID, const ConfirmOverwrite& c
   );
   const auto matches = generateMatches(
     parameters, config.matchesPerPlayer, config.ratingPeriodMatchesPerPlayer,
-    config.performanceStd, config.matchingSeed, config.resultSeed
+    config.performanceStd, config.matchingSeed, config.resultSeed,
+    config.sideAdvantage, config.conditionSeed, config.conditional
   );
 
   const auto outputDir = fs::path("runs") / io::runDirectoryName(runID);
@@ -37,13 +38,18 @@ std::optional<GenerationResult> generateRun(int runID, const ConfirmOverwrite& c
     if (fs::is_symlink(outputDir) || !fs::is_directory(outputDir)) {
       throw std::runtime_error("Output path must be a regular directory.");
     }
+    if (config.conditional || fs::exists(fs::symlink_status(outputDir / "conditions.csv")))
+      throw std::runtime_error("比較用runは上書きできません。新しいrun IDを使用してください。");
     if (!confirm || !confirm(outputDir)) return std::nullopt;
   }
 
   // 最後に保存する設定も含め、全出力先を先に検査する。
-  for (const auto& name : {std::string("config.json"), config.playersFile,
+  std::vector<std::string> outputs{std::string("config.json"), config.playersFile,
                           config.latentParametersFile, config.groundTruthFile,
-                          config.matchesFile}) {
+                          config.matchesFile};
+  if (config.conditional) outputs.insert(outputs.end(), {"conditions.csv",
+    "ground_truth_positive.csv", "ground_truth_negative.csv"});
+  for (const auto& name : outputs) {
     const auto path = outputDir / name;
     const auto status = fs::symlink_status(path);
     if (fs::exists(status) && !fs::is_regular_file(status)) {
@@ -56,8 +62,13 @@ std::optional<GenerationResult> generateRun(int runID, const ConfirmOverwrite& c
 
   writePlayers(players, (outputDir / config.playersFile).string());
   writeLatentParameters(parameters, (outputDir / config.latentParametersFile).string());
-  writeGroundTruth(parameters, config.performanceStd, (outputDir / config.groundTruthFile).string());
+  writeGroundTruth(parameters, config.performanceStd, (outputDir / config.groundTruthFile).string(), config.sideAdvantage);
   writeMatches(matches, (outputDir / config.matchesFile).string());
+  if (config.conditional) {
+    io::writeConditions(matches, (outputDir / "conditions.csv").string());
+    writeGroundTruth(parameters, config.performanceStd, (outputDir / "ground_truth_positive.csv").string(), config.sideAdvantage, 1);
+    writeGroundTruth(parameters, config.performanceStd, (outputDir / "ground_truth_negative.csv").string(), config.sideAdvantage, -1);
+  }
   io::writeConfigSnapshot(config, outputDir);
   return GenerationResult{config.numPlayers, outputDir};
 }
