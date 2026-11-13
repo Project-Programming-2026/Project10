@@ -2,6 +2,7 @@
 
 #include "project10/io/run_lock.hpp"
 #include "project10/evaluation/mse.hpp"
+#include "project10/io/config.hpp"
 
 #include <filesystem>
 #include <string>
@@ -13,6 +14,10 @@ struct EvaluationResult {
   // 公開成功後の一時ファイル削除失敗だけを通知する。通常は空。
   std::filesystem::path cleanupWarning;
 };
+
+// 呼び出し側で対象runのロックを保持する。CSVの形式はヘッダー識別か既存手法の契約から指定。
+std::vector<MseResult> calculateFileMse(const io::EvaluationContext& context,
+  const std::filesystem::path& predictions, bool conditionalPredictions);
 
 // カレントディレクトリのruns/内の保存済み設定・予測を使用する。
 // 既定では自身でrunロックを取得し、入力検証からMSE公開・一時ファイル削除まで保持する。

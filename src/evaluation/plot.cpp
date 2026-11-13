@@ -132,7 +132,71 @@ void validateImage(const fs::path& path, bool png) {
                           prefix.find("<svg") != std::string::npos;
   if (!valid) throw std::runtime_error("gnuplotの出力画像が不正です: " + path.string());
 }
+
+// 呼び出し側で制御文字・バッククォートを拒否済み。二重引用符内の文字列としてのみ使う。
+std::string plotLabel(const std::string& label) {
+  std::string result = "\"";
+  for (const char c : label) {
+    if (c == '\\' || c == '"') result += '\\';
+    result += c;
+  }
+  return result + '"';
+}
 }  // namespace
+
+fs::path plotFiles(const std::vector<CsvSeriesInput>& inputs, const std::string& name,
+                   bool png, const std::string& gnuplot, const std::vector<std::string>& arguments) {
+  FileComparison comparison(inputs, name);
+  std::vector<MseSeries> series;
+  int maximum = 0;
+  for (std::size_t i = 0; i < inputs.size(); ++i) {
+    const auto& context = comparison.contexts[i];
+    if (context.conditional != comparison.contexts.front().conditional)
+      throw std::invalid_argument("通常MSEと条件付きMSEは同じ図に描画できません。");
+    const auto label = inputs[i].label + " (run " + std::to_string(inputs[i].runID) +
+      (context.conditional ? "; " + context.scenario : "") + ")";
+    series.push_back({label, {}, io::readMseCsv(inputs[i].path.string(), inputs[i].runID,
+      context.matchesPerPlayer, context.interval)});
+    maximum = std::max(maximum, context.matchesPerPlayer);
+  }
+  std::ostringstream script;
+  script.imbue(std::locale::classic());
+  script << std::setprecision(std::numeric_limits<double>::max_digits10);
+  for (std::size_t i = 0; i < series.size(); ++i) {
+    script << "$data" << i << " << EOD\n";
+    for (const auto& point : series[i].points) script << point.matchesPerPlayer << ' ' << point.mse << '\n';
+    script << "EOD\n";
+  }
+  script << "set encoding utf8\nset title 'MSE comparison ("
+    << (comparison.contexts.front().conditional ? "conditional, both sides" : "unconditional")
+    << ")'\nset xlabel 'Cumulative matches per player'\nset ylabel 'MSE'\n"
+    << "set xrange [0:" << maximum << "]\nset yrange [0:" << yMaximum(series) << "]\n"
+    << "set grid xtics ytics\nset key outside right center\n";
+  for (std::size_t i = 0; i < series.size(); ++i)
+    script << "set style line " << i + 1 << " lc rgb '" << colors[i % 6]
+      << "' dt " << i % 5 + 1 << " lw 2 pt " << i % 13 + 1 << " ps 0.8\n";
+  script << "set terminal svg size 1000,650 noenhanced\nset output 'mse.svg'\nplot ";
+  for (std::size_t i = 0; i < series.size(); ++i) {
+    if (i) script << ", ";
+    script << "$data" << i << " using 1:2 with linespoints ls " << i + 1
+      << " title " << plotLabel(series[i].algorithm);
+  }
+  script << "\nunset output\n";
+  if (png) script << "set terminal pngcairo size 1000,650 noenhanced\nset output 'mse.png'\nreplot\nunset output\n";
+  std::vector<std::string> files{"plot.gp", "mse.svg", "manifest.json"};
+  if (png) files.push_back("mse.png");
+  ComparisonOutput output(name, files);
+  std::ofstream file(output.path / "plot.gp");
+  file << script.str();
+  file.close();
+  if (!file) throw std::runtime_error("描画スクリプトを保存できません。");
+  runGnuplot(gnuplot, output.path);
+  validateImage(output.path / "mse.svg", false);
+  if (png) validateImage(output.path / "mse.png", true);
+  comparison.writeManifest(output.path, "plot", arguments, files);
+  output.complete();
+  return output.path;
+}
 
 void plotRun(int runID, bool png, const std::string& name,
              const std::string& gnuplot, std::ostream& log, const io::RunLock* borrowedLock,

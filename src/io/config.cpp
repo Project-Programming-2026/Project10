@@ -296,6 +296,29 @@ GlickoConfig loadGlickoConfig(int runID, const std::filesystem::path& root) {
   }
 }
 
+EvaluationContext loadEvaluationContext(int runID) {
+  const auto path = std::filesystem::path("runs") / runDirectoryName(runID) / "config.json";
+  const auto text = readConfigText(path);
+  try {
+    const auto config = parseConfig(text);
+    EvaluationContext result{readInteger(config, "run_id", 0),
+      readInteger(config, "num_players", 2), readInteger(config, "matches_per_player", 1),
+      readInteger(config, "evaluation_interval_matches_per_player", 1),
+      config.contains("comparison"), {}, text};
+    if (result.runID != runID || result.numPlayers % 2 != 0 ||
+        result.matchesPerPlayer < result.interval)
+      throw std::runtime_error("評価設定が不正か、run IDが一致していません。");
+    if (result.conditional) {
+      result.scenario = config.at("comparison").at("scenario").get<std::string>();
+      if (result.scenario != "S0" && result.scenario != "S1")
+        throw std::runtime_error("比較シナリオはS0またはS1を指定してください。");
+    }
+    return result;
+  } catch (const json::exception&) {
+    throw std::runtime_error("評価用の設定JSONの構文・必須項目・型を確認してください: " + path.string());
+  }
+}
+
 EvaluationConfig loadEvaluationConfig(int runID, const std::string& algorithm,
                                       const std::filesystem::path& root) {
   std::string stem;

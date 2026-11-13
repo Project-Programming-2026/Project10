@@ -258,6 +258,16 @@ void readPredictionsCsv(const std::string& path, evaluation::MseEvaluator& evalu
   consumePredictionsCsv(path, [&](const auto& row) { evaluator.addPrediction(row); });
 }
 
+bool hasConditionalPredictions(const std::string& path) {
+  std::ifstream file(path);
+  std::string header;
+  if (!std::getline(file, header)) throw std::runtime_error("予測CSVを読み込めません: " + path);
+  if (!header.empty() && header.back() == '\r') header.pop_back();
+  if (header == "run_id,matches_per_player,player_a,player_b,predicted_p_a_wins") return false;
+  if (header == "run_id,matches_per_player,player_a,player_b,z,predicted_p_a_wins") return true;
+  throw std::invalid_argument("未知の予測CSVヘッダーです: " + path);
+}
+
 void consumePredictionsCsv(const std::string& path,
   const std::function<void(const evaluation::PredictionRow&)>& consume) {
   readCsv(path, "run_id,matches_per_player,player_a,player_b,predicted_p_a_wins", 5,

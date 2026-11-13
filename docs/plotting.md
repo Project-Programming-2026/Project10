@@ -17,6 +17,8 @@ Matplot++は [公式依存一覧](https://alandefreitas.github.io/matplotplusplu
 
 ## 依存と互換性
 
+任意CSVの[ファイル指定モード](csv-comparison.md)も同じC++17・gnuplot構成を使います。通常／条件付きのMSE定義を揃えた上で、各runの全評価時点をそのまま重ねます。手法名による固定スタイルに代わり指定順でスタイルを割り当て、入力パスはスクリプトへ渡しません。任意の表示名は制御文字・バッククォートを拒否し、二重引用符・バックスラッシュをエスケープして凡例へ渡します。既存の単一runスクリプトと再利用判定は維持します。
+
 実行時はgnuplot 5.4以降の `svg` と、PNG出力時の `pngcairo` を使います。5.4は対応下限として指定していますが、全パッチ版を検証したものではありません。PNGにはパッケージ側のCairo・Pango等の依存と利用可能なフォントが必要です。[MSYS2 UCRT64公式パッケージ](https://packages.msys2.org/packages/mingw-w64-ucrt-x86_64-gnuplot)にも対応する実行ファイルと依存一覧があります。画面表示用端末は使いません。
 
 gnuplotはGPLではなく、[gnuplot固有のライセンス](https://github.com/gnuplot/gnuplot/blob/master/Copyright)です。本リポジトリではソース・バイナリを同梱・改変せず、利用者が導入した実行ファイルを呼び出します。配布し直す場合はgnuplot本体と付属ライブラリそれぞれのライセンスを確認してください。新しい第三者ソースを同梱しないため、`third_party/` の既存JSON依存に変更はありません。

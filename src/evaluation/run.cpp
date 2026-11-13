@@ -13,23 +13,20 @@ namespace fs = std::filesystem;
 
 namespace project10::evaluation {
 
-std::vector<MseResult> calculateRunMse(int runID, const std::string& algorithm,
-                                      const io::RunLock* borrowedLock) {
+std::vector<MseResult> calculateFileMse(const io::EvaluationContext& config,
+                                      const fs::path& predictions, bool conditionalPredictions) {
+  const int runID = config.runID;
   const auto dir = fs::path("runs") / io::runDirectoryName(runID);
-  if (fs::is_symlink(dir) || !fs::is_directory(dir))
-    throw std::runtime_error("実行結果の保存先が通常のディレクトリではありません。");
-  const auto lockPath = fs::path("runs") / ("." + dir.filename().string() + ".lock");
-  if (borrowedLock) borrowedLock->requirePath(lockPath);
-  const auto lock = borrowedLock ? nullptr : std::make_unique<io::RunLock>(lockPath);
-  const auto config = io::loadEvaluationConfig(runID, algorithm);
+  if (conditionalPredictions && !config.conditional)
+    throw std::invalid_argument("通常MSEには条件z付き予測CSVを使用できません。");
   io::validatePlayersCsv((dir / "players.csv").string(), config.numPlayers);
   if (config.conditional) {
     MseEvaluator positive(runID, config.matchesPerPlayer, config.interval,
       io::readGroundTruthCsv((dir / "ground_truth_positive.csv").string(), config.numPlayers));
     MseEvaluator negative(runID, config.matchesPerPlayer, config.interval,
       io::readGroundTruthCsv((dir / "ground_truth_negative.csv").string(), config.numPlayers));
-    const auto path = (dir / config.predictionsFile).string();
-    if (algorithm == "AdvantageElo") io::readConditionalPredictionsCsv(path, positive, negative);
+    const auto path = predictions.string();
+    if (conditionalPredictions) io::readConditionalPredictionsCsv(path, positive, negative);
     else io::consumePredictionsCsv(path, [&](const auto& row) {
       positive.addPrediction(row); negative.addPrediction(row);
     });
@@ -43,8 +40,22 @@ std::vector<MseResult> calculateRunMse(int runID, const std::string& algorithm,
     runID, config.matchesPerPlayer, config.interval,
     io::readGroundTruthCsv((dir / "ground_truth.csv").string(), config.numPlayers)
   );
-  io::readPredictionsCsv((dir / config.predictionsFile).string(), evaluator);
+  io::readPredictionsCsv(predictions.string(), evaluator);
   return evaluator.finish();
+}
+
+std::vector<MseResult> calculateRunMse(int runID, const std::string& algorithm,
+                                      const io::RunLock* borrowedLock) {
+  const auto dir = fs::path("runs") / io::runDirectoryName(runID);
+  if (fs::is_symlink(dir) || !fs::is_directory(dir))
+    throw std::runtime_error("実行結果の保存先が通常のディレクトリではありません。");
+  const auto lockPath = fs::path("runs") / ("." + dir.filename().string() + ".lock");
+  if (borrowedLock) borrowedLock->requirePath(lockPath);
+  const auto lock = borrowedLock ? nullptr : std::make_unique<io::RunLock>(lockPath);
+  const auto config = io::loadEvaluationConfig(runID, algorithm);
+  return calculateFileMse({runID, config.numPlayers, config.matchesPerPlayer, config.interval,
+    config.conditional, {}, {}}, dir / config.predictionsFile,
+    config.conditional && algorithm == "AdvantageElo");
 }
 
 EvaluationResult evaluateRun(int runID, const std::string& algorithm,
