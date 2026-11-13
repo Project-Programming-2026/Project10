@@ -16,7 +16,7 @@ namespace fs = std::filesystem;
 namespace io = project10::io;
 namespace {
 
-// 排他的に作成した自分の一時領域だけを片付ける。実験結果は失敗時も残す。
+// この処理で排他的に作成した一時領域だけを削除する。実験結果は失敗時も残す。
 struct Workspace {
   fs::path path;
   explicit Workspace(const fs::path& location) : path(location) {
@@ -56,14 +56,14 @@ int main(int argc, char** argv) {
       else if (option == "--all-methods") allMethods = true;
       else if (option == "--comparison") comparison = true;
       else if (option == "--ranked-reference-run")
-        throw std::invalid_argument("PR #28以降は固定参照を使用します。新しいrunで--all-methodsを指定してください。");
+        throw std::invalid_argument("--ranked-reference-runは使用できません。固定の参照分布を使うには、新しいrunで--all-methodsを指定してください。");
       else if (option == "--reuse-existing") reuse = true;
       else if (option == "--gnuplot" && i + 1 < argc) gnuplot = argv[++i];
       else if (option == "--name" && i + 1 < argc) name = argv[++i];
       else if (option == "--help") {
         std::cout << "project10_run [--all-methods] [--reuse-existing] [--png] [--name graphs] [--gnuplot executable]\n"
-                     "通常は4手法。--all-methodsはPR #28の固定参照で6手法を実行します。\n"
-                     "--comparisonは既存の条件付き評価。6手法には--all-methodsも指定します。\n";
+                     "既定では4手法を実行します。--all-methodsを指定すると、固定の参照分布を使って6手法を実行します。\n"
+                     "--comparisonを指定すると、先手・後手の条件付き評価を行います。6手法を評価する場合は--all-methodsも指定してください。\n";
         return 0;
       } else throw std::invalid_argument("不正なオプションです: " + option);
     }
@@ -75,9 +75,9 @@ int main(int argc, char** argv) {
     if (!(parser >> runID) || runID < 0 || !(parser >> std::ws).eof())
       throw std::invalid_argument("run IDが不正です。");
     const auto run = fs::absolute(fs::path("runs") / io::runDirectoryName(runID));
-    if (!reuse && fs::exists(fs::symlink_status(run))) throw std::runtime_error("既存runは使用しません。");
+    if (!reuse && fs::exists(fs::symlink_status(run))) throw std::runtime_error("既存runへの上書きはできません。新しいrun IDを指定するか、--reuse-existingで既存の成果物を再利用してください。");
     if (reuse && (fs::is_symlink(run) || !fs::is_directory(run)))
-      throw std::runtime_error("再利用には既存の通常runが必要です。");
+      throw std::runtime_error("再利用するrunの保存先には、シンボリックリンクではない既存のディレクトリが必要です。");
     const auto simulation = io::loadConfig(runID);
     if (simulation.conditional != comparison)
       throw std::runtime_error("comparison設定と--comparisonは両方を指定してください。");
@@ -86,7 +86,7 @@ int main(int argc, char** argv) {
       const auto config = io::loadRatingConfig(runID, method, "configs");
       if (method == "Glicko2" && (config.period != 10 || config.interval != 10 ||
                                    config.matchesPerPlayer % 10 != 0))
-        throw std::runtime_error("Glicko2は期間・評価間隔10、総対戦数は10の倍数に限定しています。");
+        throw std::runtime_error("Glicko2では、更新期間と評価間隔を1人当たり10試合、1人当たりの総対戦数を10の倍数に設定してください。");
     }
     io::loadGlickoConfig(runID, "configs");
     io::loadPlotConfig(runID, "configs");
@@ -98,8 +98,8 @@ int main(int argc, char** argv) {
       std::cout << "比較: " << simulation.scenario << "、同一履歴・条件付きMSE、"
                    "Elo/Advantage-Eloの試合前Log Loss・Brier Score\n";
     if (allMethods)
-      std::cout << "rankedGlicko2: PR #28の固定参照 samples/glicko_baseline を使用します。\n"
-                   "独立した追加学習を含む比較です。\n";
+      std::cout << "rankedGlicko2: samples/glicko_baseline の固定参照分布を使用します。\n"
+                   "評価用データとは別のデータで学習した分布を使って比較します。\n";
     fs::create_directories("runs");
     const auto lockPath = run.parent_path() / ("." + run.filename().string() + ".lock");
     const io::RunLock lock(lockPath);
@@ -112,7 +112,7 @@ int main(int argc, char** argv) {
       stage = "生成";
       std::cout << stage << '\n' << std::flush;
       if (!project10::simulation::generateRun(runID, {}, &lock))
-        throw std::runtime_error("既存runは使用しません。");
+        throw std::runtime_error("既存runへの上書きはできません。新しいrun IDを指定するか、--reuse-existingで既存の成果物を再利用してください。");
     }
     const Workspace workspace(lockPath / "predictions");
     if (!reuse) {
@@ -147,7 +147,7 @@ int main(int argc, char** argv) {
         std::cout << stage << '\n' << std::flush;
         const bool direct = method != "Glicko" && method != "TrueSkill";
         if (method == "rankedGlicko2") {
-          // PR #28の相対パスを隔離作業先で再現する。数式・手法側のパスは変更しない。
+          // ranked Glicko-2が参照する相対パスに、保存済みの分布を配置する。
           const auto baseline = workspace.path / "samples/glicko_baseline";
           fs::create_directories(baseline);
           fs::copy_file(project10::evaluation::fixedReferenceDirectory(runID) / "glicko2_rating.csv",

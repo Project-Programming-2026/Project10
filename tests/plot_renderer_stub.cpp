@@ -1,4 +1,4 @@
-// CLIの失敗処理専用。実描画の確認にはplot_renderで本物のgnuplotを使う。
+// CLIの失敗処理を検証するための代替プログラム。実際の描画はplot_renderでgnuplotを使って確認する。
 #include <cstdlib>
 #include <fstream>
 #include <string>

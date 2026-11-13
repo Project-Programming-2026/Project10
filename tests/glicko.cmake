@@ -21,10 +21,10 @@ function(invoke program input expected_error)
     OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 30)
   if(expected_error STREQUAL "")
     if(NOT result STREQUAL "0")
-      message(FATAL_ERROR "実行失敗: ${output}${error}")
+      message(FATAL_ERROR "実行に失敗しました: ${output}${error}")
     endif()
   elseif(result STREQUAL "0" OR NOT error MATCHES "${expected_error}")
-    message(FATAL_ERROR "期待したエラー「${expected_error}」と異なります: ${result} ${output}${error}")
+    message(FATAL_ERROR "想定したエラーを確認できませんでした。\n想定するメッセージ: ${expected_error}\n実際の終了結果: ${result}\n実際の出力: ${output}${error}")
   endif()
 endfunction()
 
@@ -79,7 +79,7 @@ if(NOT before STREQUAL after)
   message(FATAL_ERROR "同じ入力から予測を再現できません")
 endif()
 
-# 共通のMSE評価がそのまま読めること。
+# 出力した予測CSVを共通のMSE評価処理で読み込めること。
 file(RENAME "${work}/hidden/ground_truth.csv" "${run}/ground_truth.csv")
 invoke("${EVALUATOR}" "0\nGlicko\n" "")
 file(STRINGS "${run}/glicko_mse.csv" mse)

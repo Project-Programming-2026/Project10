@@ -82,7 +82,7 @@ void writeGroundTruth(
     std::numeric_limits<double>::max_digits10
   );
 
-  // 自己対戦を除外しつつ、逆順の組み合わせも除外するようなループを回す
+  // 自己対戦と逆順の重複を避け、i < jのペアだけを出力する。
   for (std::size_t i = 0; i < parameters.size(); i++) {
     for (std::size_t j = i + 1; j < parameters.size(); j++) {
       const double probability = calculateConditionalWinProbability(
@@ -284,7 +284,7 @@ std::vector<evaluation::MseResult> readMseCsv(
       throw std::invalid_argument("MSEの評価時点が重複しています。");
     }
   });
-  // 全手法を同一の設定上の評価時点へ照合する。欠落を交差集合で隠さない。
+  // 全手法について、設定されたすべての評価時点が揃っていることを確認する。
   if (points.size() != static_cast<std::size_t>(matchesPerPlayer / interval)) {
     throw std::runtime_error("MSEの評価時点が不足しています。手法間の比較条件が一致しません: " + path);
   }
@@ -295,7 +295,7 @@ std::vector<evaluation::MseResult> readMseCsv(
 
 namespace {
 int side(const std::string& value) {
-  if (value != "1" && value != "-1") throw std::invalid_argument("条件zは1または-1が必要です。");
+  if (value != "1" && value != "-1") throw std::invalid_argument("条件zには1または-1を指定してください。");
   return value == "1" ? 1 : -1;
 }
 }
@@ -333,7 +333,7 @@ void readOnlinePredictionsCsv(const std::string& path,
   const std::function<void(const evaluation::OnlinePrediction&)>& consume) {
   readCsv(path, "run_id,match_id,z,result_a,p_elo,p_advantage", 6, [&](const auto& fields) {
     const int result = integer(fields[3]);
-    if (result > 1) throw std::invalid_argument("勝敗は0または1が必要です。");
+    if (result > 1) throw std::invalid_argument("勝敗には0または1を指定してください。");
     consume({integer(fields[0]), integer<std::uint64_t>(fields[1]), side(fields[2]),
              result, probability(fields[4]), probability(fields[5])});
   });
@@ -469,7 +469,7 @@ void writeOnlinePredictions(
           // 各人の実際の試合数を確認し、欠損・重複データがないことを検証する
           for (int p = 0; p < totalPlayers; ++p) {
             if (elo.matchCount(p) != currentMatches) {
-              throw std::runtime_error("プレイヤーの消化試合数が不揃いです（欠損・重複履歴の検出）");
+              throw std::runtime_error("プレイヤーごとの対戦数が想定と一致しません。履歴に欠落や重複がないか確認してください。");
             }
           }
 
@@ -498,7 +498,7 @@ void writeOnlinePredictions(
     const int finalMatches = static_cast<int>(matches.size() / static_cast<std::size_t>(matchesPerRound));
     for (int p = 0; p < totalPlayers; ++p) {
       if (elo.matchCount(p) != finalMatches) {
-        throw std::runtime_error("最終的なプレイヤーの消化試合数が不揃いです（欠損・重複履歴の検出）");
+        throw std::runtime_error("プレイヤーごとの最終対戦数が想定と一致しません。履歴に欠落や重複がないか確認してください。");
       }
     }
 

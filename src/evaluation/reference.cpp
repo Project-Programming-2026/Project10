@@ -27,7 +27,7 @@ void compatible(const io::SimulationConfig& target, const io::SimulationConfig& 
   if (target.runID == ref.runID || target.abilitySeed == ref.abilitySeed ||
       target.matchingSeed == ref.matchingSeed || target.resultSeed == ref.resultSeed ||
       target.conditionSeed == ref.conditionSeed)
-    throw std::runtime_error("参照分布は別run・別の全シードで生成してください。");
+    throw std::runtime_error("参照分布は評価用とは別のrun IDで生成し、能力・対戦組み合わせ・勝敗・条件割り当ての各シードも、対応する評価用の値と変えてください。");
   if (!target.conditional || !ref.conditional || target.scenario != ref.scenario ||
       target.numPlayers != ref.numPlayers || target.mean != ref.mean || target.stddev != ref.stddev ||
       target.performanceStd != ref.performanceStd || target.sideAdvantage != ref.sideAdvantage ||
@@ -37,14 +37,14 @@ void compatible(const io::SimulationConfig& target, const io::SimulationConfig& 
 void independent(const io::SimulationConfig& target, const io::SimulationConfig& ref) {
   if (target.runID == ref.runID || target.abilitySeed == ref.abilitySeed ||
       target.matchingSeed == ref.matchingSeed || target.resultSeed == ref.resultSeed)
-    throw std::runtime_error("固定参照とは別run・別の能力／組合せ／勝敗シードを使用してください。");
+    throw std::runtime_error("評価用のrun IDと、能力・対戦組み合わせ・勝敗の各シードには、固定参照の対応する値とは異なる値を指定してください。");
 }
 ReferenceData fixedData(const fs::path& root, const io::SimulationConfig& target) {
   directory(root);
   regular(root / "config.json"); regular(root / "glicko2_rating.csv");
   const auto reference = io::loadSimulationConfigFile(root / "config.json");
   independent(target, reference);
-  // 分布の学習人数は評価人数と独立。参照側の設定人数で完全性を検査する。
+  // 参照分布の学習人数は評価人数と異なってよい。参照側の設定人数とCSVの件数を照合する。
   io::readGlicko2RatingsCsv((root / "glicko2_rating.csv").string(), reference.numPlayers);
   return {reference.sourceText, text(root / "glicko2_rating.csv")};
 }

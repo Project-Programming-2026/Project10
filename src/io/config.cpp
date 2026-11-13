@@ -99,7 +99,7 @@ void validateExperimentSettings(const json& config) {
   }
 }
 
-}  // namespaceおわり
+}  // namespace
 
 std::string runDirectoryName(int runID) {
   if (runID < 0) {
@@ -214,7 +214,7 @@ bool isFixedReferenceRun(int runID) {
   const auto path = std::filesystem::path("runs") / runDirectoryName(runID) / "project10_run.json";
   if (!std::filesystem::exists(std::filesystem::symlink_status(path))) return false;
   if (!std::filesystem::is_regular_file(std::filesystem::symlink_status(path)))
-    throw std::runtime_error("runマーカーは通常ファイルが必要です。");
+    throw std::runtime_error("runの識別マーカーには、シンボリックリンクではない通常のファイルが必要です。");
   const auto marker = parseConfig(readConfigText(path));
   const auto mode = marker.value("mode", std::string{});
   if (mode != "six_method_fixed_reference_v1" && mode != "conditional_fixed_reference_v1") return false;
@@ -426,4 +426,4 @@ void writeConfigSnapshot(
   }
 }
 
-}  // namespace project10::ioおわり
+}  // namespace project10::io
