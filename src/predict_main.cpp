@@ -14,34 +14,21 @@
 // Elo/Glicko-2の既存関数への入口。Glicko-2は1プロセスで1回だけ呼ぶ。
 int main(int argc, char** argv) {
   try {
-<<<<<<< HEAD
-    if (argc != 3) throw std::invalid_argument("project10_predict runID Elo|Glicko2|rankedGlicko2");
-=======
     if (argc != 3) throw std::invalid_argument("project10_predict runID Elo|Glicko2|AdvantageElo|rankedGlicko2");
->>>>>>> origin/main
     int runID;
     const std::string_view input = argv[1];
     const auto parsed = std::from_chars(input.data(), input.data() + input.size(), runID);
     if (parsed.ec != std::errc{} || parsed.ptr != input.data() + input.size() || runID < 0)
       throw std::invalid_argument("run IDが不正です。");
     const std::string algorithm = argv[2];
-<<<<<<< HEAD
-    if (algorithm != "Elo" && algorithm != "Glicko2" && algorithm != "rankedGlicko2") throw std::invalid_argument("未対応の手法名です。");
-=======
     if (algorithm != "Elo" && algorithm != "Glicko2" && algorithm != "rankedGlicko2" &&
         algorithm != "AdvantageElo") throw std::invalid_argument("未対応の手法名です。");
->>>>>>> origin/main
     const auto dir = fs::path("runs") / project10::io::runDirectoryName(runID);
     if (fs::is_symlink(dir) || !fs::is_directory(dir)) throw std::runtime_error("runの保存先には、シンボリックリンクではない既存のディレクトリが必要です。");
     const project10::io::RunLock lock(fs::path("runs") / ("." + dir.filename().string() + ".lock"));
     const auto config = project10::io::loadRatingConfig(runID, algorithm);
     const auto output = dir / config.predictionsFile;
     if (fs::exists(fs::symlink_status(output))) throw std::runtime_error("予測出力先がすでに存在します。");
-<<<<<<< HEAD
-    if ((algorithm == "Glicko2" || algorithm == "rankedGlicko2") && (config.period != 10 || config.interval != 10 ||
-                                   config.matchesPerPlayer % 10 != 0)) {
-      throw std::runtime_error("Glicko2、rankedGlicko2は期間・評価間隔10、総対戦数は10の倍数に限定しています。");
-=======
     const auto reference = dir / "glicko2_rating.csv";
     if (algorithm == "Glicko2" && fs::exists(fs::symlink_status(reference)))
       throw std::runtime_error("Glicko2の最終レート出力先がすでに存在します。");
@@ -62,7 +49,6 @@ int main(int argc, char** argv) {
     if ((algorithm == "Glicko2" || algorithm == "rankedGlicko2") && (config.period != 10 || config.interval != 10 ||
                                    config.matchesPerPlayer % 10 != 0)) {
       throw std::runtime_error("Glicko2とrankedGlicko2では、更新期間と評価間隔を1人当たり10試合、1人当たりの総対戦数を10の倍数に設定してください。");
->>>>>>> origin/main
     }
     project10::io::validatePlayersCsv((dir / "players.csv").string(), config.numPlayers);
     auto matches = project10::io::readMatchesCsv(
@@ -70,8 +56,6 @@ int main(int argc, char** argv) {
     if (algorithm == "Elo") {
       project10::io::writeEloPredictions(runID, generatePlayers(config.numPlayers), matches,
                                         config.interval, output.string());
-<<<<<<< HEAD
-=======
     } else if (algorithm == "AdvantageElo") {
       std::ofstream online;
       if (config.conditional) {
@@ -91,7 +75,6 @@ int main(int argc, char** argv) {
         online.close();
         if (!online) throw std::runtime_error("試合前予測ログを保存できません。");
       }
->>>>>>> origin/main
     } else if(algorithm == "Glicko2"){
       generate_glicko2_prediction(runID, dir);
     } else{
