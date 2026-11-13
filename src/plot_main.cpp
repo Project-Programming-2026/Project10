@@ -7,18 +7,19 @@
 
 int main(int argc, char** argv) {
   try {
-    bool png = false;
-    std::string name = "graphs", gnuplot = "gnuplot";
-    for (int i = 1; i < argc; ++i) {
-      const std::string option = argv[i];
-      if (option == "--png") png = true;
-      else if ((option == "--name" || option == "--gnuplot") && i + 1 < argc) {
-        (option == "--name" ? name : gnuplot) = argv[++i];
-      } else if (option == "--help") {
-        std::cout << "project10_plot [--png] [--name graphs] [--gnuplot executable]\n"
-                  << "run IDを標準入力から読みます。既存出力は上書きしません。\n";
-        return 0;
-      } else throw std::invalid_argument("不正なオプションです: " + option);
+    const auto options = project10::evaluation::parseFileOptions(argc, argv, true);
+    if (options.help) {
+      std::cout << "project10_plot [--png] [--name graphs] [--gnuplot executable]\n"
+                << "run IDを標準入力から読みます。既存出力は上書きしません。\n"
+                << "project10_plot --input label run_ID CSV [--input ...] --name name [--png] [--gnuplot executable]\n"
+                << "任意のMSE CSVを描画し、runs/comparisons/name/へ保存します。\n";
+      return 0;
+    }
+    if (!options.inputs.empty()) {
+      const auto output = project10::evaluation::plotFiles(options.inputs, options.name,
+        options.png, options.gnuplot, options.arguments);
+      std::cout << "グラフ保存先: " << output.string() << '\n';
+      return 0;
     }
     std::cout << "Enter run ID: ";
     std::string input;
@@ -28,7 +29,8 @@ int main(int argc, char** argv) {
     if (!(parser >> runID) || runID < 0 || !(parser >> std::ws).eof()) {
       throw std::invalid_argument("run IDが不正です。0以上の整数を入力してください。");
     }
-    project10::evaluation::plotRun(runID, png, name, gnuplot, std::cout);
+    project10::evaluation::plotRun(runID, options.png, options.name.empty() ? "graphs" : options.name,
+                                 options.gnuplot, std::cout);
   } catch (const std::exception& error) {
     std::cerr << "エラー: " << error.what() << '\n';
     return 1;

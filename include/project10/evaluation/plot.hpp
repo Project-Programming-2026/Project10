@@ -1,6 +1,7 @@
 #pragma once
 
 #include "project10/evaluation/mse.hpp"
+#include "project10/evaluation/files.hpp"
 #include "project10/io/run_lock.hpp"
 
 #include <iosfwd>
@@ -20,5 +21,9 @@ struct MseSeries {
 void plotRun(int runID, bool png, const std::string& name,
              const std::string& gnuplot, std::ostream& log,
              const io::RunLock* borrowedLock = nullptr, bool reuseExisting = false);
+
+std::filesystem::path plotFiles(const std::vector<CsvSeriesInput>& inputs,
+  const std::string& name, bool png, const std::string& gnuplot,
+  const std::vector<std::string>& arguments = {});
 
 }  // namespace project10::evaluation
