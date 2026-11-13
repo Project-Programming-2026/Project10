@@ -4,6 +4,8 @@
 
 現在は、データ生成、Elo・Glicko・Glicko-2・TrueSkillの予測、共通MSE評価、単一runの比較グラフ生成を実装しています。`project10_run` で全工程を一括実行し、`--reuse-existing` で検証済みの既存成果物を再利用できます。追加2手法は、`--all-methods` による[6手法の一括実行](#6手法の一括実行固定参照)と、`--comparison` による[先手有利あり／なしの比較](#先手有利ありなしの比較実験)に対応しています。C++17・CMakeでビルドし、CTestで検証できます。高度な復旧・実行履歴管理・複数試行の連続実行や集計は未実装です。
 
+`project10_evaluate`・`project10_plot` は、[任意CSVのMSE評価・比較描画](docs/csv-comparison.md)にも対応しています。表示名・run ID・CSVパスを複数指定し、同じ手法のパラメータ違いや異なるrunの結果を比較できます。
+
 ## 目次
 
 - [研究背景・目的](#background)
@@ -370,6 +372,8 @@ run ID、続いて `Elo`・`Glicko`・`Glicko2`・`TrueSkill`・`AdvantageElo`�
 
 ### 共通サービス（開発者向け）
 
+任意の複数CSVを扱う場合は、[ファイル指定モード](docs/csv-comparison.md)を使用します。`evaluateFiles`・`plotFiles` は `CsvSeriesInput { label, runID, path }` の一覧と出力名を受け取り、出力ディレクトリを返します。
+
 `project10_core` に次の共通関数を公開しています。実行時のカレントディレクトリを基準に従来の設定・出力先を使い、既存CLIと同じ検証・保存処理を通します。
 
 - `project10::simulation::generateRun(runID, confirm)`：設定を読み込み、1試行を生成・保存します。成功時は人数と出力先、上書き拒否時は `std::nullopt` を返します。`confirm` は既存ディレクトリ（空でも対象）の場合だけ呼ばれ、未指定・`false` は拒否です。
@@ -493,6 +497,8 @@ run_0008では先手・後手の予測勝率を平均して評価し、run_0009�
 **先手情報を使うAdvantage-Eloと、別のデータで学習した固定分布を使うranked Glicko-2では、利用する情報が他手法と異なります。** 6手法を一括実行しても、同じ情報・学習予算での比較にはなりません。固定参照は先手有利なしで学習した分布であり、S1では参照用データと評価用データの生成条件も異なります。S1の結果を、同一条件における6手法の優劣を示すものとして扱わないでください。評価式・CSV仕様・制約は[比較実験の基盤](docs/comparison.md)を参照してください。
 
 ### MSEの比較グラフ生成
+
+以下は既存の単一runモードです。任意のMSE CSVを複数指定する操作は[ファイル指定モード](docs/csv-comparison.md)を参照してください。
 
 `project10_plot` は生成・評価とは独立したC++17のコマンドです。ビルドには追加ライブラリ不要で、描画時だけ **gnuplot 5.4以降（`svg`端末、PNG使用時は`pngcairo`端末）** が必要です。Python・GUI・画面表示は使いません。技術比較、ライセンスと検証環境は [描画方式の選定](docs/plotting.md) を参照してください。
 
