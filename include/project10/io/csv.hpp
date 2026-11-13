@@ -33,6 +33,8 @@ std::vector<Match> readMatchesCsv(
 );
 evaluation::ProbabilityMatrix readGroundTruthCsv(const std::string& path, int numPlayers);
 void readPredictionsCsv(const std::string& path, evaluation::MseEvaluator& evaluator);
+// 既存5列／条件z付き6列だけを識別する。未知のヘッダーは拒否する。
+bool hasConditionalPredictions(const std::string& path);
 void consumePredictionsCsv(const std::string& path,
   const std::function<void(const evaluation::PredictionRow&)>& consume);
 void readConditionalPredictionsCsv(const std::string& path,
