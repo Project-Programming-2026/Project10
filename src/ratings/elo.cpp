@@ -114,12 +114,12 @@ const std::vector<int>& EloRating::matchCounts() const noexcept {
   return matchCounts_;
 }
 
-// 今のレートをもとに「AがBに勝つ確率」を予想する
+// 現在のレートから、AがBに勝つ確率を予測する。
 double EloRating::predictWinProbability(int playerA, int playerB) const {
   return predictWinProbability(playerA, playerB, 0.0);
 }
 
-// 今のレートと一時的な条件補正量をもとに「AがBに勝つ確率」を予想する
+// 現在のレートと一時的な条件補正量から、AがBに勝つ確率を予測する。
 double EloRating::predictWinProbability(
   int playerA,
   int playerB,
@@ -165,7 +165,7 @@ double EloRating::updateMatch(
   const double expectedA = predictWinProbability(playerA, playerB, ratingOffsetA);
   const double actualA = static_cast<double>(resultA);
 
-  // 2. 公式に従って変動量を計算: Δ = K * (実結果 - 予想勝率)
+  // 2. 公式に従って変動量を計算: Δ = K * (実際の勝敗 - 予測勝率)
   const double delta = params_.kFactor * (actualA - expectedA);
 
   // 3. レートを更新（Aが増えた分だけBは減る）

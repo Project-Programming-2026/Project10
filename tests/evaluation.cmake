@@ -21,7 +21,7 @@ function(evaluate input expected_error)
       message(FATAL_ERROR "MSE評価に失敗しました: ${output}${error}")
     endif()
   elseif(result STREQUAL "0" OR NOT error MATCHES "${expected_error}")
-    message(FATAL_ERROR "期待したエラー「${expected_error}」と一致しません: ${result} ${output}${error}")
+    message(FATAL_ERROR "想定したエラーを確認できませんでした。\n想定するメッセージ: ${expected_error}\n実際の終了結果: ${result}\n実際の出力: ${output}${error}")
   endif()
 endfunction()
 

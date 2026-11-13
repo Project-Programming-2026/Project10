@@ -3,6 +3,17 @@
 #include <cmath>
 #include <stdexcept>
 
+double calculateConditionalWinProbability(double a, double b, double stddev,
+                                          double advantage, int condition) {
+  if (!std::isfinite(advantage) || advantage < 0 || condition < -1 || condition > 1)
+    throw std::invalid_argument("条件付き勝率の設定が不正です。");
+  if (advantage == 0) return calculateWinProbability(a, b, stddev);
+  if (condition == 0)
+    return 0.5 * (calculateConditionalWinProbability(a, b, stddev, advantage, 1) +
+                  calculateConditionalWinProbability(a, b, stddev, advantage, -1));
+  return calculateWinProbability(a + advantage * condition, b, stddev);
+}
+
 double calculateWinProbability(
   double thetaA,
   double thetaB,

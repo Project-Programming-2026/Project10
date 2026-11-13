@@ -23,13 +23,13 @@ int main(int argc, char** argv) {
     const auto points = project10::io::readMseCsv(path, 7, 25, 10);
     if (points.size() != 2 || points[0].matchesPerPlayer != 10 ||
         points[0].mse != 0.0625 || points[1].matchesPerPlayer != 20 || points[1].mse != 0) {
-      throw std::runtime_error("MSEの値・昇順・端数処理が一致しません。");
+      throw std::runtime_error("MSEの値、評価時点の並び順、端数の扱いのいずれかが想定と異なります。");
     }
     const auto reject = [&](const std::string& data) {
       write(data);
       try { project10::io::readMseCsv(path, 7, 25, 10); }
       catch (const std::exception&) { return; }
-      throw std::runtime_error("不正CSVを受理しました: " + data);
+      throw std::runtime_error("不正なCSVが受け付けられました: " + data);
     };
     for (const auto* value : {"NaN", "Inf", "-Inf", "1e999", "-0.1", "1.1", "", "0.1x"}) {
       reject(header + "7,10," + value + "\n7,20,0\n");

@@ -17,7 +17,7 @@ namespace fs = std::filesystem;
 namespace {
 
 void require(bool condition) {
-  if (!condition) throw std::runtime_error("runサービスの契約違反");
+  if (!condition) throw std::runtime_error("runの生成・評価処理が仕様どおりに動作していません");
 }
 
 void write(const fs::path& path, const std::string& text) {
@@ -84,7 +84,7 @@ void testServices(const std::string& sampleConfig) {
   write(dir / "keep.txt", "unrelated result");
   config["num_players"] = 4;
   write("configs/run_0000/config.json", config.dump(2));
-  require(!project10::simulation::generateRun(0));  // 非対話利用でも既定は拒否。
+  require(!project10::simulation::generateRun(0));  // 非対話で呼び出した場合も、既定では上書きしない。
   require(!project10::simulation::generateRun(0, [&](const fs::path& output) {
     ++confirmations;
     require(output == dir && fs::is_directory(lock));
@@ -121,7 +121,7 @@ void testServices(const std::string& sampleConfig) {
   write(dir / "elo.csv", header + "0,20,0,1,0.5\n0,10,0,1,0.75\n");
   fs::create_directory(lock);
   rejects([] { project10::evaluation::evaluateRun(0, "Elo"); }, "このrunはすでに使用中です");
-  require(fs::is_empty(lock));  // 他者のロックは削除しない。
+  require(fs::is_empty(lock));  // 別の処理が保持しているロックは削除しない。
   fs::remove(lock);
   const auto evaluated = project10::evaluation::evaluateRun(0, "Elo");
   require(evaluated.output == dir / "elo_mse.csv" && evaluated.cleanupWarning.empty());

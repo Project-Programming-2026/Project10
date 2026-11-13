@@ -1,0 +1,48 @@
+{
+  "schema_version": "1.0",
+  "run_id": 8,
+  "num_players": 1000,
+  "matches_per_player": 200,
+  "evaluation_interval_matches_per_player": 10,
+  "rating_period_matches_per_player": 10,
+  "model": "probit_1d",
+  "ability_distribution": {
+    "type": "normal",
+    "mean": 0,
+    "std": 1
+  },
+  "performance_std": 1,
+  "glicko": {
+    "initial_rating": 1500,
+    "initial_rd": 350,
+    "rd_growth": 0
+  },
+  "matchmaking": "uniform_random",
+  "seeds": {
+    "ability": 2026102809,
+    "matching": 2026102810,
+    "result": 2026102811
+  },
+  "files": {
+    "players": "players.csv",
+    "matches": "matches.csv",
+    "latent_parameters": "latent_parameters.csv",
+    "ground_truth": "ground_truth.csv",
+    "predictions": {
+      "Elo": "elo.csv",
+      "Glicko": "glicko.csv",
+      "Glicko2": "glicko2.csv",
+      "rankedGlicko2": "ranked_glicko2.csv",
+      "TrueSkill": "trueskill.csv",
+      "AdvantageElo": "advantage_elo.csv"
+    },
+    "mse": {
+      "Elo": "elo_mse.csv",
+      "Glicko": "glicko_mse.csv",
+      "Glicko2": "glicko2_mse.csv",
+      "rankedGlicko2": "ranked_glicko2_mse.csv",
+      "TrueSkill": "trueskill_mse.csv",
+      "AdvantageElo": "advantage_elo_mse.csv"
+    }
+  }
+}

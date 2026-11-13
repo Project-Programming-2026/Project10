@@ -4,7 +4,7 @@
 #include <cmath>
 #include <random>
 
-// 標準正規分布を使用して潜在能力を生成する関数
+// 指定された平均と標準偏差の正規分布から潜在能力を生成する。
 std::vector<double> generateLatentParameters(
   std::size_t numPlayers,
   double mean,
@@ -22,7 +22,7 @@ std::vector<double> generateLatentParameters(
     throw std::invalid_argument("Invalid normal distribution parameters");
   }
 
-  // 乱数生成器を初期化（mt19937というのが乱数生成器で、64ビットの符号なし整数を生成する）
+  // 指定されたシードで64ビットの乱数生成器を初期化する。
   std::mt19937_64 rng(seed);
 
   // 正規分布を定義
