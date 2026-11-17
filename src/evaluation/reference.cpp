@@ -30,7 +30,7 @@ void compatible(const io::SimulationConfig& target, const io::SimulationConfig& 
     throw std::runtime_error("参照分布は評価用とは別のrun IDで生成し、能力・対戦組み合わせ・勝敗・条件割り当ての各シードも、対応する評価用の値と変えてください。");
   if (!target.conditional || !ref.conditional || target.scenario != ref.scenario ||
       target.numPlayers != ref.numPlayers || target.mean != ref.mean || target.stddev != ref.stddev ||
-      target.performanceStd != ref.performanceStd || target.sideAdvantage != ref.sideAdvantage ||
+      target.winModel != ref.winModel || target.sideAdvantage != ref.sideAdvantage ||
       target.ratingPeriodMatchesPerPlayer != ref.ratingPeriodMatchesPerPlayer)
     throw std::runtime_error("参照分布と評価runの生成条件が一致しません。");
 }
