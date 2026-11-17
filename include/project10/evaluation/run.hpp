@@ -2,6 +2,7 @@
 
 #include "project10/io/run_lock.hpp"
 #include "project10/evaluation/mse.hpp"
+#include "project10/evaluation/ranking.hpp"
 #include "project10/io/config.hpp"
 
 #include <filesystem>
@@ -28,5 +29,12 @@ EvaluationResult evaluateRun(int runID, const std::string& algorithm,
 // CSVの検証・MSE計算だけを行い、既存結果を変更しない。
 std::vector<MseResult> calculateRunMse(int runID, const std::string& algorithm,
                                       const io::RunLock* borrowedLock = nullptr);
+
+std::vector<RankingResult> calculateFileRanking(const io::EvaluationContext& context,
+  const std::filesystem::path& predictions, bool conditionalPredictions);
+std::vector<RankingResult> calculateRunRanking(int runID, const std::string& algorithm,
+  const io::RunLock* borrowedLock = nullptr);
+EvaluationResult evaluateRunRanking(int runID, const std::string& algorithm,
+  const io::RunLock* borrowedLock = nullptr);
 
 }  // namespace project10::evaluation

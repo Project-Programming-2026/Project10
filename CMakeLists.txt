@@ -25,6 +25,7 @@ add_library(project10_core
   src/ratings/ranked_glicko2.cpp
   src/simulation/run.cpp
   src/evaluation/MSE.cpp
+  src/evaluation/ranking.cpp
   src/evaluation/online.cpp
   src/evaluation/reference.cpp
   src/ratings/trueskill.cpp
@@ -209,6 +210,13 @@ if(BUILD_TESTING)
     target_compile_options(evaluation_tests PRIVATE /utf-8)
   endif()
   add_test(NAME evaluation_unit COMMAND evaluation_tests "${CMAKE_CURRENT_BINARY_DIR}/test-work")
+  add_executable(ranking_tests tests/ranking_tests.cpp)
+  target_link_libraries(ranking_tests PRIVATE project10_plotting nlohmann_json::nlohmann_json)
+  if(MSVC)
+    target_compile_options(ranking_tests PRIVATE /utf-8)
+  endif()
+  add_test(NAME ranking_unit COMMAND ranking_tests
+    "${CMAKE_CURRENT_BINARY_DIR}/test-work/ranking-unit" "$<TARGET_FILE:plot_renderer_stub>")
   add_test(NAME cli_evaluation
     COMMAND "${CMAKE_COMMAND}"
       "-DPROGRAM=$<TARGET_FILE:project10_evaluate>"

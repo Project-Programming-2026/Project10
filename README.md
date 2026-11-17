@@ -370,6 +370,14 @@ run ID、続いて `Elo`・`Glicko`・`Glicko2`・`TrueSkill`・`AdvantageElo`�
 
 生成と共通のrunロックを保持し、全入力の検証と一時ファイルの保存を終えてから、ハードリンク作成でMSE CSVを公開します。この操作は出力先が存在すれば失敗するため、ロックを使わない別処理が直前に保存したファイルも置き換えません。公開後に一時ファイルを削除します。ロック領域と出力先は同一ファイルシステムに置き、ハードリンク非対応などで作成できない場合はエラーで停止します。既存のMSE出力はリンクも含めて拒否し、上書き確認は行いません。`samples/` には正解勝率が含まれないため、評価には来歴に沿って再生成し、ハッシュを照合した正解情報が別途必要です。
 
+### 予測勝率に基づく順位距離の評価
+
+[第13回会議（2026-11-13）](https://app.notion.com/p/416751d0ef6d809181a2f75fca13dbcc)で提案された順位評価について、既存6手法の予測CSVを共通の評価手順で扱うため、期待勝利数スコアの順位に基づく3指標（定義ID `expected_wins_borda_half_tie`）を実装しています。各手法の内部推定ロジックとCSV形式を変えずに比較できる一方、Glicko・Glicko-2・TrueSkillのように予測勝率が不確実性（`RD` や `σ`）にも依存する手法では、この順位が内部レート（`r`・`μ`）の順序と一致しない場合があります。例えば4人Glickoで $(r,\mathrm{RD})$ が $A=(1600,100), B=(1599,50), C=(1000,50), D=(900,50)$ のとき、レート順は $A>B>C>D$ ですが、期待勝利数は $S_A=2.442276 < S_B=2.445880$（$S_C=0.707412, S_D=0.404432$）となり、BがAを上回ります。したがって本指標は「内部レート順位の精度」ではなく「予測勝率行列が誘導する総合序列の精度」を測る定義であり、正式採用と同順位・正規化不能条件の扱いはチームで合意を記録する必要があります。
+
+各評価時点・プレイヤー $i$ のスコアは $S_i=\sum_{j\neq i} p_{ij}$（$p_{ji}=1-p_{ij}$、条件付き6列CSVは $z=\pm 1$ の等重み平均 $0.5(p_{ij}(+1)+p_{ij}(-1))$）です。真の潜在能力差 $\Delta\theta_{ij}=\theta_i-\theta_j$ とスコア差 $\Delta S_{ij}=S_i-S_j$ から逆転指標 $I_{ij}$（逆転は `1`、同方向または両方同値は `0`、片側のみ同値は `0.5`）を定め、Kendall距離 $D_{\mathrm{K}}=\sum_{i<j} I_{ij}$（範囲 $[0, N(N-1)/2]$）、重み付きKendall距離 $D_{\mathrm{WK}}=\sum_{i<j}|\theta_i-\theta_j|\,I_{ij}$（範囲 $[0, W]$、$W=\sum_{i<j}|\theta_i-\theta_j|$）、正規化重み付きKendall距離 $D_{\mathrm{NWK}}=D_{\mathrm{WK}}/W$（範囲 $[0, 1]$）を計算します。片側同値の罰則 `0.5` は実装上の仮仕様であり、全員同一能力（$W=0$）や非有限値は例外で停止します（時間・空間計算量は $O(TN^2)$、$N=1{,}000, T=20$ で勝率配列約80 MB）。
+
+`project10_evaluate --ranking`、`project10_plot --ranking`、`project10_run --ranking` で利用でき、`<手法>_ranking.csv`（列 `run_id,matches_per_player,kendall_distance,weighted_kendall_distance,normalized_weighted_kendall_distance`）と3種類の順位グラフ（`ranking_kendall`・`ranking_weighted_kendall`・`ranking_normalized_weighted_kendall`）を出力します。単一runの `plot.gp` には `# ranking_definition: expected_wins_borda_half_tie`、ファイル指定モードの `manifest.json` には `ranking_definition` を記録します。
+
 ### 共通サービス（開発者向け）
 
 任意の複数CSVを扱う場合は、[ファイル指定モード](docs/csv-comparison.md)を使用します。`evaluateFiles`・`plotFiles` は `CsvSeriesInput { label, runID, path }` の一覧と出力名を受け取り、出力ディレクトリを返します。

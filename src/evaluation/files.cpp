@@ -51,11 +51,15 @@ FileOptions parseFileOptions(int argc, char** argv, bool plot) {
       value = argv[++i];
       if (value.empty()) throw std::invalid_argument(option + "の値は空にできません。");
     } else if (plot && option == "--png") options.png = true;
+    else if (option == "--ranking") options.ranking = true;
     else throw std::invalid_argument("不正なオプション、または引数不足です: " + option);
   }
   if (!options.help && !options.inputs.empty()) validateName(options.name);
-  if (!options.help && !plot && options.inputs.empty() && argc > 1)
-    throw std::invalid_argument("ファイル指定モードには--inputが必要です。");
+  if (!options.help && !plot && options.inputs.empty() && argc > 1) {
+    if (!(argc == 2 && options.ranking)) {
+      throw std::invalid_argument("ファイル指定モードには--inputが必要です。");
+    }
+  }
   return options;
 }
 
@@ -98,7 +102,12 @@ void FileComparison::writeManifest(const fs::path& directory, const std::string&
       {"input", fs::absolute(input.path).lexically_normal().string()},
       {"mse_definition", context.conditional ? "conditional_equal_sides" : "unconditional"},
       {"config", json::parse(context.sourceText)}});
-    if (operation == "evaluate") manifest["series"].back()["output"] = outputs.at(i);
+    auto& entry = manifest["series"].back();
+    if (operation == "evaluate_ranking" || operation == "plot_ranking") {
+      entry.erase("mse_definition");
+      entry["ranking_definition"] = "expected_wins_borda_half_tie";
+    }
+    if (operation == "evaluate" || operation == "evaluate_ranking") entry["output"] = outputs.at(i);
   }
   std::ofstream file(directory / "manifest.json");
   file << manifest.dump(2) << '\n';
@@ -127,23 +136,27 @@ ComparisonOutput::~ComparisonOutput() {
 }
 
 fs::path evaluateFiles(const std::vector<CsvSeriesInput>& inputs, const std::string& name,
-                      const std::vector<std::string>& arguments) {
+                      const std::vector<std::string>& arguments, bool ranking) {
   FileComparison comparison(inputs, name);
-  std::vector<std::vector<MseResult>> results;
+  std::vector<std::vector<MseResult>> mseResults;
+  std::vector<std::vector<RankingResult>> rankingResults;
   std::vector<std::string> outputs;
   for (std::size_t i = 0; i < inputs.size(); ++i) {
     const auto conditional = io::hasConditionalPredictions(inputs[i].path.string());
-    results.push_back(calculateFileMse(comparison.contexts[i], inputs[i].path, conditional));
     std::ostringstream filename;
-    filename << "series_" << std::setfill('0') << std::setw(4) << i + 1 << "_mse.csv";
+    filename << "series_" << std::setfill('0') << std::setw(4) << i + 1 << (ranking ? "_ranking.csv" : "_mse.csv");
+    if (ranking) rankingResults.push_back(calculateFileRanking(comparison.contexts[i], inputs[i].path, conditional));
+    else mseResults.push_back(calculateFileMse(comparison.contexts[i], inputs[i].path, conditional));
     outputs.push_back(filename.str());
   }
   auto files = outputs;
   files.push_back("manifest.json");
   ComparisonOutput output(name, files);
-  for (std::size_t i = 0; i < inputs.size(); ++i)
-    io::writeMseCsv((output.path / outputs[i]).string(), inputs[i].runID, results[i]);
-  comparison.writeManifest(output.path, "evaluate", arguments, files);
+  for (std::size_t i = 0; i < inputs.size(); ++i) {
+    if (ranking) io::writeRankingCsv((output.path / outputs[i]).string(), inputs[i].runID, rankingResults[i]);
+    else io::writeMseCsv((output.path / outputs[i]).string(), inputs[i].runID, mseResults[i]);
+  }
+  comparison.writeManifest(output.path, ranking ? "evaluate_ranking" : "evaluate", arguments, files);
   output.complete();
   return output.path;
 }

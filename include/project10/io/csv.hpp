@@ -2,6 +2,7 @@
 
 #include "project10/simulation/matches.hpp"
 #include "project10/evaluation/mse.hpp"
+#include "project10/evaluation/ranking.hpp"
 #include "project10/ratings/elo.hpp"
 #include "project10/ratings/advantage_elo.hpp"
 #include "project10/evaluation/online.hpp"
@@ -33,12 +34,15 @@ std::vector<Match> readMatchesCsv(
 );
 evaluation::ProbabilityMatrix readGroundTruthCsv(const std::string& path, int numPlayers);
 void readPredictionsCsv(const std::string& path, evaluation::MseEvaluator& evaluator);
+void readPredictionsCsv(const std::string& path, evaluation::RankingEvaluator& evaluator);
 // 既存5列／条件z付き6列だけを識別する。未知のヘッダーは拒否する。
 bool hasConditionalPredictions(const std::string& path);
 void consumePredictionsCsv(const std::string& path,
   const std::function<void(const evaluation::PredictionRow&)>& consume);
 void readConditionalPredictionsCsv(const std::string& path,
   evaluation::MseEvaluator& positive, evaluation::MseEvaluator& negative);
+void readConditionalPredictionsCsv(const std::string& path,
+  evaluation::RankingEvaluator& evaluator);
 void writeConditions(const std::vector<Match>& matches, const std::string& path);
 void readConditionsCsv(const std::string& path, std::vector<Match>& matches);
 void readOnlinePredictionsCsv(const std::string& path,
@@ -54,6 +58,12 @@ std::vector<evaluation::MseResult> readMseCsv(
 );
 void writeMseCsv(
   const std::string& path, int runID, const std::vector<evaluation::MseResult>& results
+);
+std::vector<evaluation::RankingResult> readRankingCsv(
+  const std::string& path, int runID, int matchesPerPlayer, int interval, int numPlayers
+);
+void writeRankingCsv(
+  const std::string& path, int runID, const std::vector<evaluation::RankingResult>& results
 );
 // 保存済み一時ファイルを同一ファイルシステム内のハードリンクで公開する。
 // 出力先があれば原子的に失敗する。成功後の一時ファイル削除は呼び出し側で行う。

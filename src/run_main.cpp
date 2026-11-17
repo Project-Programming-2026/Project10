@@ -48,22 +48,24 @@ std::string sibling(const char* argv0, const std::string& name) {
 int main(int argc, char** argv) {
   std::string stage = "設定確認";
   try {
-    bool png = false, reuse = false, allMethods = false, comparison = false;
+    bool png = false, reuse = false, allMethods = false, comparison = false, ranking = false;
     std::string gnuplot = "gnuplot", name = "graphs";
     for (int i = 1; i < argc; ++i) {
       const std::string option = argv[i];
       if (option == "--png") png = true;
       else if (option == "--all-methods") allMethods = true;
       else if (option == "--comparison") comparison = true;
+      else if (option == "--ranking") ranking = true;
       else if (option == "--ranked-reference-run")
         throw std::invalid_argument("--ranked-reference-runは使用できません。固定の参照分布を使うには、新しいrunで--all-methodsを指定してください。");
       else if (option == "--reuse-existing") reuse = true;
       else if (option == "--gnuplot" && i + 1 < argc) gnuplot = argv[++i];
       else if (option == "--name" && i + 1 < argc) name = argv[++i];
       else if (option == "--help") {
-        std::cout << "project10_run [--all-methods] [--reuse-existing] [--png] [--name graphs] [--gnuplot executable]\n"
+        std::cout << "project10_run [--all-methods] [--comparison] [--ranking] [--reuse-existing] [--png] [--name graphs] [--gnuplot executable]\n"
                      "既定では4手法を実行します。--all-methodsを指定すると、固定の参照分布を使って6手法を実行します。\n"
-                     "--comparisonを指定すると、先手・後手の条件付き評価を行います。6手法を評価する場合は--all-methodsも指定してください。\n";
+                     "--comparisonを指定すると、先手・後手の条件付き評価を行います。6手法を評価する場合は--all-methodsも指定してください。\n"
+                     "--rankingを指定すると、順位距離の評価CSVとグラフも生成します。\n";
         return 0;
       } else throw std::invalid_argument("不正なオプションです: " + option);
     }
@@ -106,7 +108,7 @@ int main(int argc, char** argv) {
     project10::evaluation::ReusePlan plan;
     if (reuse) {
       stage = "再利用検証";
-      plan = project10::evaluation::inspectReusableRun(runID, lock, allMethods, comparison);
+      plan = project10::evaluation::inspectReusableRun(runID, lock, allMethods, comparison, -1, ranking);
       std::cout << "再利用: 生成済み共通入力\n";
     } else {
       stage = "生成";
@@ -177,15 +179,15 @@ int main(int argc, char** argv) {
           fs::remove(workerRun / "conditions.csv");
         }
       }
-      if (plan.mse.count(method)) {
-        std::cout << "再利用: " << method << " MSE\n";
-        continue;
-      }
-      stage = method + " MSE評価";
-      std::cout << stage << '\n' << std::flush;
-      const auto result = project10::evaluation::evaluateRun(runID, method, &lock);
-      if (!result.cleanupWarning.empty())
-        std::cerr << "一時ファイルを削除できません: " << result.cleanupWarning.string() << '\n';
+      const auto runEvalStep = [&](bool reused, const std::string& label, const std::string& stageSuffix, auto fn) {
+        if (reused) { std::cout << "再利用: " << method << ' ' << label << '\n'; return; }
+        stage = method + ' ' + stageSuffix; std::cout << stage << '\n' << std::flush;
+        const auto result = fn(runID, method, &lock);
+        if (!result.cleanupWarning.empty())
+          std::cerr << "一時ファイルを削除できません: " << result.cleanupWarning.string() << '\n';
+      };
+      runEvalStep(plan.mse.count(method) != 0, "MSE", "MSE評価", project10::evaluation::evaluateRun);
+      if (ranking) runEvalStep(plan.ranking.count(method) != 0, "順位評価", "順位評価", project10::evaluation::evaluateRunRanking);
     }
     if (comparison && !plan.onlineMetrics) {
       stage = "試合前評価";
@@ -200,7 +202,7 @@ int main(int argc, char** argv) {
     }
     stage = "グラフ生成";
     std::cout << stage << '\n' << std::flush;
-    project10::evaluation::plotRun(runID, png, name, gnuplot, std::cout, &lock, reuse);
+    project10::evaluation::plotRun(runID, png, name, gnuplot, std::cout, &lock, reuse, ranking);
     std::cout << "一括実行完了: " << run.string() << '\n';
   } catch (const std::exception& error) {
     std::cerr << "エラー（" << stage << "）: " << error.what() << '\n';
