@@ -20,6 +20,7 @@ add_library(project10_core
   src/simulation/players.cpp
   src/simulation/latent_parameters.cpp
   src/simulation/probit.cpp
+  src/simulation/win_probability.cpp
   src/simulation/matches.cpp
   src/ratings/glicko2.cpp
   src/ratings/ranked_glicko2.cpp
@@ -78,6 +79,31 @@ endif()
 include(CTest)
 if(BUILD_TESTING)
   find_program(PROJECT10_GNUPLOT NAMES gnuplot gnuplot-nox)
+  add_executable(win_model_tests tests/win_model_tests.cpp)
+  target_link_libraries(win_model_tests PRIVATE project10_core nlohmann_json::nlohmann_json)
+  if(MSVC)
+    target_compile_options(win_model_tests PRIVATE /utf-8)
+  endif()
+  add_test(NAME win_model_unit COMMAND win_model_tests
+    "${CMAKE_CURRENT_BINARY_DIR}/test-work/win-model" "${CMAKE_CURRENT_SOURCE_DIR}/configs/run_0008/config.json")
+  # 既存の契約・描画検証を、モデルだけ変更した条件でも実行する。
+  foreach(workflow comparison six_methods reuse)
+    set(model_sample "${CMAKE_CURRENT_SOURCE_DIR}/configs/run_0008/config.json")
+    if(workflow STREQUAL "reuse")
+      set(model_sample "${CMAKE_CURRENT_SOURCE_DIR}/configs/run_0000/config.json")
+    endif()
+    foreach(mode contract render)
+      add_test(NAME logistic_${workflow}_${mode} COMMAND "${CMAKE_COMMAND}"
+        "-DPROGRAM=$<TARGET_FILE:project10_run>" "-DBIN=$<TARGET_FILE_DIR:project10_run>"
+        "-DPROBE=$<TARGET_FILE:batch_probe>" "-DRENDERER=$<TARGET_FILE:batch_probe>"
+        "-DEXE=${CMAKE_EXECUTABLE_SUFFIX}" "-DGNUPLOT=${PROJECT10_GNUPLOT}"
+        "-DWIN_MODEL=logistic_1d" "-DMODE=${mode}" "-DSOURCE=${CMAKE_CURRENT_SOURCE_DIR}"
+        "-DSAMPLE_CONFIG=${model_sample}" "-DBASELINE=${CMAKE_CURRENT_SOURCE_DIR}/samples/glicko_baseline"
+        "-DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/test-work"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/${workflow}.cmake")
+    endforeach()
+    set_tests_properties(logistic_${workflow}_render PROPERTIES SKIP_REGULAR_EXPRESSION "SKIP: gnuplot")
+  endforeach()
   add_executable(file_series_tests tests/file_series_tests.cpp)
   target_link_libraries(file_series_tests PRIVATE project10_plotting nlohmann_json::nlohmann_json)
   if(MSVC)

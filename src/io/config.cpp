@@ -91,8 +91,8 @@ void validateExperimentSettings(const json& config) {
       throw std::runtime_error(std::string(field) + " must be a non-empty string.");
     }
   }
-  if (config.at("model") != "probit_1d") {
-    throw std::runtime_error("Only the probit_1d model is implemented.");
+  if (config.at("model") != "probit_1d" && config.at("model") != "logistic_1d") {
+    throw std::runtime_error("Unknown win probability model.");
   }
   if (config.at("matchmaking") != "uniform_random") {
     throw std::runtime_error("Only uniform_random round matching is implemented.");
@@ -136,10 +136,14 @@ SimulationConfig loadSimulationConfigFile(const std::filesystem::path& configPat
     config, "rating_period_matches_per_player", 1
   );
   validateExperimentSettings(config);
-  settings.performanceStd = readFiniteNumber(config, "performance_std");
-  if (settings.performanceStd <= 0.0) {
-    throw std::runtime_error("performance_std must be positive.");
-  }
+  const bool logistic = config.at("model") == "logistic_1d";
+  const auto* scaleField = logistic ? "logistic_scale" : "performance_std";
+  if (config.contains(logistic ? "performance_std" : "logistic_scale"))
+    throw std::runtime_error("モデルと尺度の指定が一致しません。尺度の併記はできません。");
+  const double scale = readFiniteNumber(config, scaleField);
+  if (scale <= 0) throw std::runtime_error(std::string(scaleField) + " must be positive.");
+  if (logistic) settings.winModel = simulation::LogisticModel{scale};
+  else settings.winModel = simulation::ProbitModel{scale};
 
   // 3. 潜在能力の生成に使う正規分布の平均と標準偏差を取得する。
   const auto& distribution = config.at("ability_distribution");
@@ -418,7 +422,8 @@ ratings::AdvantageEloParameters loadAdvantageParameters(int runID, const std::fi
 
 void writeRatingSnapshot(int runID, const std::filesystem::path& directory) {
   auto config = parseConfig(readConfigText(std::filesystem::path("runs") / runDirectoryName(runID) / "config.json"));
-  for (const auto* field : {"seeds", "ability_distribution", "performance_std"}) config.erase(field);
+  for (const auto* field : {"seeds", "ability_distribution", "performance_std", "logistic_scale", "model"})
+    config.erase(field);
   if (config.contains("comparison")) {
     config["comparison"].erase("side_advantage");
     config["comparison"].erase("condition_seed");

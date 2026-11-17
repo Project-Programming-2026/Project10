@@ -2,7 +2,7 @@
 #include "project10/evaluation/run.hpp"
 #include "project10/io/config.hpp"
 #include "project10/io/csv.hpp"
-#include "project10/simulation/probit.hpp"
+#include "project10/simulation/win_probability.hpp"
 #include "project10/evaluation/reference.hpp"
 
 #include <cmath>
@@ -47,8 +47,8 @@ ReusePlan inspectReusableRun(int runID, const io::RunLock& lock, bool allMethods
   const auto truth = io::readGroundTruthCsv((run / "ground_truth.csv").string(), config.numPlayers);
   for (int a = 0; a < config.numPlayers; ++a) {
     for (int b = a + 1; b < config.numPlayers; ++b) {
-      if (std::abs(truth[a][b] - calculateConditionalWinProbability(latent[a], latent[b],
-          config.performanceStd, config.sideAdvantage, 0)) > 1e-12)
+      if (std::abs(truth[a][b] - simulation::winProbability(latent[a], latent[b],
+          config.winModel, config.sideAdvantage, 0)) > 1e-12)
         throw std::runtime_error("潜在能力と正解勝率が一致しません。");
     }
   }
@@ -63,8 +63,8 @@ ReusePlan inspectReusableRun(int runID, const io::RunLock& lock, bool allMethods
       const auto values = io::readGroundTruthCsv((run / (z == 1 ? "ground_truth_positive.csv" :
         "ground_truth_negative.csv")).string(), config.numPlayers);
       for (int a = 0; a < config.numPlayers; ++a) for (int b = a + 1; b < config.numPlayers; ++b)
-        if (std::abs(values[a][b] - calculateConditionalWinProbability(latent[a], latent[b],
-            config.performanceStd, config.sideAdvantage, z)) > 1e-12)
+        if (std::abs(values[a][b] - simulation::winProbability(latent[a], latent[b],
+            config.winModel, config.sideAdvantage, z)) > 1e-12)
           throw std::runtime_error("条件付き正解勝率が潜在能力・有利幅と一致しません。");
     }
   }

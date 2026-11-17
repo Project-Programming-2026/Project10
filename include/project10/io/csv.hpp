@@ -20,6 +20,12 @@ void writeLatentParameters(
 
 void writeGroundTruth(
   const std::vector<double>& parameters,
+  const project10::simulation::WinProbabilityModel& model,
+  const std::string& outputPath, double sideAdvantage = 0, int condition = 0
+);
+
+void writeGroundTruth(
+  const std::vector<double>& parameters,
   double performanceStd,
   const std::string& outputPath, double sideAdvantage = 0, int condition = 0
 );

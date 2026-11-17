@@ -1,6 +1,5 @@
 #include "project10/io/csv.hpp"
 #include "project10/io/run_lock.hpp"
-#include "project10/simulation/probit.hpp"
 
 #include <fstream>
 #include <iomanip>
@@ -66,9 +65,11 @@ void writeLatentParameters(
 
 void writeGroundTruth(
   const std::vector<double>& parameters,
-  double performanceStd,
+  const project10::simulation::WinProbabilityModel& model,
   const std::string& outputPath, double sideAdvantage, int condition
 ) {
+  // 不正なモデル・条件は出力ファイルを開く前に拒否する。
+  project10::simulation::winProbability(0, 0, model, sideAdvantage, condition);
   std::ofstream file(outputPath);
 
   if (!file.is_open()) {
@@ -85,10 +86,10 @@ void writeGroundTruth(
   // 自己対戦と逆順の重複を避け、i < jのペアだけを出力する。
   for (std::size_t i = 0; i < parameters.size(); i++) {
     for (std::size_t j = i + 1; j < parameters.size(); j++) {
-      const double probability = calculateConditionalWinProbability(
+      const double probability = project10::simulation::winProbability(
         parameters[i],
         parameters[j],
-        performanceStd, sideAdvantage, condition
+        model, sideAdvantage, condition
       );
 
       file << i << ',' << j << ','
@@ -103,6 +104,12 @@ void writeGroundTruth(
       "Failed to write: " + outputPath
     );
   }
+}
+
+void writeGroundTruth(const std::vector<double>& parameters, double performanceStd,
+  const std::string& path, double advantage, int condition) {
+  writeGroundTruth(parameters, project10::simulation::ProbitModel{performanceStd},
+    path, advantage, condition);
 }
 
 namespace project10::io {
