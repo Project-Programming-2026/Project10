@@ -250,5 +250,39 @@ void generate_glicko2_prediction(int run_id, fs::path file_path){
         out_rating << players.at(a)->get_rate() << endl;
     }
     for(auto [_, player]:players) delete(player);
+    players.clear();
+    exist_player.clear();
 }
 
+Glicko2System::Glicko2System(fs::path runDir){
+    string line;
+    ifstream in_players(runDir / input_file_players);
+    if(!in_players){
+        cerr << "could not open players.csv." << endl;
+        return;
+    }
+    getline(in_players,line); //一回読み飛ばす
+    while(getline(in_players,line)){
+        int id = stoi(line);
+        exist_player.push_back(id);
+        players.emplace(id,new Player(id));
+    }
+    in_players.close();
+}
+
+Glicko2System::~Glicko2System(){
+    players.clear();
+    exist_player.clear();
+}
+
+double Glicko2System::getRating(int playerId) const{
+    return players.at(playerId)->get_rate();
+}
+
+void Glicko2System::update(const vector<Match>& matches){
+    for(Match match: matches){
+        players.at(match.playerA)->push_result(match.resultA, match.playerB);
+        players.at(match.playerB)->push_result(1 - match.resultA, match.playerA);
+    }
+    update_all();
+}

@@ -11,5 +11,5 @@ public:
     Glicko2System(fs::path runDir);
     ~Glicko2System() override;
     double getRating(int playerId) const override;
-    void update(const std::vector<Match>& matches) override;
+    void update(const vector<Match>& matches) override;
 };
