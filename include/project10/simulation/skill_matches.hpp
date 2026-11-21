@@ -16,4 +16,4 @@ public:
     ) = 0;
 };
 
-void generateSkillMatch(int runID);
+void generateSkillMatches(int runID);

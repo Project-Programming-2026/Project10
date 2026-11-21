@@ -187,7 +187,7 @@ void simurate(
 
 }
 
-void generateSkillMatch(int runID){
+void generateSkillMatches(int runID){
     string algorithm;
     cout << "Enter algorithm (Elo/Glicko/Glicko2/TrueSkill/AdvantageElo/rankedGlicko2): "; //アルゴリズムの追加につきここに追記
     cin >> algorithm;
