@@ -21,6 +21,7 @@ add_library(project10_core
   src/simulation/latent_parameters.cpp
   src/simulation/probit.cpp
   src/simulation/matches.cpp
+  src/simulation/skill_matches.cpp
   src/ratings/glicko2.cpp
   src/ratings/ranked_glicko2.cpp
   src/simulation/run.cpp
@@ -61,6 +62,8 @@ add_executable(project10_predict src/predict_main.cpp)
 target_link_libraries(project10_predict PRIVATE project10_core)
 add_executable(project10_run src/run_main.cpp)
 target_link_libraries(project10_run PRIVATE project10_plotting)
+add_executable(project10_skill_matching src/skill_matches_main.cpp)
+target_link_libraries(project10_skill_matching PRIVATE project10_core)
 add_dependencies(project10_run project10_predict project10_glicko project10_trueskill)
 if(MSVC)
   target_compile_options(project10_predict PRIVATE /utf-8)
