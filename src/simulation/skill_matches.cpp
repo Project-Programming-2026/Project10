@@ -192,10 +192,11 @@ void generateSkillMatch(int runID){
     cout << "Enter algorithm (Elo/Glicko/Glicko2/TrueSkill/AdvantageElo/rankedGlicko2): "; //アルゴリズムの追加につきここに追記
     cin >> algorithm;
     
+    auto runDir = fs::path("runs") / project10::io::runDirectoryName(runID);
     //スキルマッチに対応した手法は以下を更新
     if(algorithm == "Elo") throw runtime_error("スキルマッチ未対応の手法です");
     else if(algorithm == "Glicko") throw runtime_error("スキルマッチ未対応の手法です");
-    else if(algorithm == "Glicko2") {Glicko2System system; simurate(system,runID);}
+    else if(algorithm == "Glicko2") {Glicko2System system(runDir); simurate(system,runID);}
     else if(algorithm == "TrueSkill") throw runtime_error("スキルマッチ未対応の手法です");
     else if(algorithm == "AdvantageElo") throw runtime_error("スキルマッチ未対応の手法です");
     else if(algorithm == "rankedGlicko2") throw runtime_error("スキルマッチ未対応の手法です");

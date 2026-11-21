@@ -9,6 +9,7 @@ void generate_glicko2_prediction(int run_id, fs::path file_path);
 class Glicko2System: public RatingSystem{
 public:
     Glicko2System(fs::path runDir);
+    ~Glicko2System();
     double getRating(int playerId) const override;
     void update(const std::vector<Match>& matches) override;
 };
