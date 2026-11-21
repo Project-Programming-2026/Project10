@@ -271,6 +271,7 @@ Glicko2System::Glicko2System(fs::path runDir){
 }
 
 Glicko2System::~Glicko2System(){
+    for(auto [_, player]:players) delete(player);
     players.clear();
     exist_player.clear();
 }

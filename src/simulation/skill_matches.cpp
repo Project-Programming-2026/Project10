@@ -134,8 +134,8 @@ void simurate(
 
 
     vector<Match> totalMatches;
+    std::mt19937_64 matchingRng(config.matchingSeed);
     for(int i = 0; i < config.matchesPerPlayer / ratingPeriodMatches; i++){
-        std::mt19937_64 matchingRng(config.matchingSeed);
         shuffle(players.begin(), players.end(), matchingRng);
         stable_sort(players.begin(),players.end(),[](Player& p1, Player& p2){return p1.rating < p2.rating;});
         vector<Match> matches;
