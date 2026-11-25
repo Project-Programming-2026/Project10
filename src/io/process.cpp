@@ -15,8 +15,36 @@
 
 namespace project10::io {
 
-void runProcess(const std::string& program, const std::vector<std::string>& arguments,
-                const std::filesystem::path& directory, const std::filesystem::path& input) {
+struct ChildProcess::State {
+  std::string program;
+#ifdef _WIN32
+  HANDLE child = nullptr;
+#else
+  pid_t child = -1;
+#endif
+  bool wait() noexcept {
+#ifdef _WIN32
+    if (!child) return true;
+    const auto waited = WaitForSingleObject(child, INFINITE);
+    DWORD status = 1;
+    const bool obtained = GetExitCodeProcess(child, &status) != 0;
+    CloseHandle(child);
+    child = nullptr;
+    return waited == WAIT_OBJECT_0 && obtained && status == 0;
+#else
+    if (child < 0) return true;
+    int status = 0;
+    pid_t result;
+    do { result = waitpid(child, &status, 0); } while (result == -1 && errno == EINTR);
+    child = -1;
+    return result > 0 && WIFEXITED(status) && WEXITSTATUS(status) == 0;
+#endif
+  }
+};
+
+ChildProcess::ChildProcess(const std::string& program, const std::vector<std::string>& arguments,
+                           const std::filesystem::path& directory, const std::filesystem::path& input)
+    : state_(new State{program}) {
   auto executable = std::filesystem::path(program);
   if (executable.has_parent_path()) executable = std::filesystem::absolute(executable);
 #ifdef _WIN32
@@ -54,12 +82,8 @@ void runProcess(const std::string& program, const std::vector<std::string>& argu
     CREATE_NO_WINDOW, nullptr, directory.c_str(), &startup, &process) != 0;
   if (source != INVALID_HANDLE_VALUE) CloseHandle(source);
   if (!started) throw std::runtime_error("外部プログラムを起動できません: " + program);
-  WaitForSingleObject(process.hProcess, INFINITE);
-  DWORD status = 1;
-  const bool obtained = GetExitCodeProcess(process.hProcess, &status) != 0;
   CloseHandle(process.hThread);
-  CloseHandle(process.hProcess);
-  if (!obtained || status != 0) {
+  state_->child = process.hProcess;
 #else
   std::vector<std::string> values{executable.string()};
   values.insert(values.end(), arguments.begin(), arguments.end());
@@ -78,13 +102,23 @@ void runProcess(const std::string& program, const std::vector<std::string>& argu
     execvp(argv[0], argv.data());
     _exit(127);
   }
-  int status = 0;
-  pid_t result;
-  do { result = waitpid(child, &status, 0); } while (result == -1 && errno == EINTR);
-  if (result == -1 || !WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+  state_->child = child;
 #endif
-    throw std::runtime_error("外部プログラムの実行に失敗しました: " + program);
-  }
+}
+
+ChildProcess::~ChildProcess() {
+  state_->wait();
+}
+
+void ChildProcess::wait() {
+  if (!state_->wait())
+    throw std::runtime_error("外部プログラムの実行に失敗しました: " + state_->program);
+}
+
+void runProcess(const std::string& program, const std::vector<std::string>& arguments,
+                const std::filesystem::path& directory, const std::filesystem::path& input) {
+  ChildProcess child(program, arguments, directory, input);
+  child.wait();
 }
 
 }  // namespace project10::io

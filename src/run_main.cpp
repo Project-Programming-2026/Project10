@@ -7,10 +7,14 @@
 #include "project10/io/process.hpp"
 #include "project10/simulation/run.hpp"
 
+#include <charconv>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <sstream>
 #include <stdexcept>
+#include <string_view>
+#include <vector>
 
 namespace fs = std::filesystem;
 namespace io = project10::io;
@@ -43,12 +47,64 @@ std::string sibling(const char* argv0, const std::string& name) {
 #endif
   return path.has_parent_path() ? fs::absolute(path).string() : path.string();
 }
+
+void prepareWorker(const fs::path& directory, const fs::path& run, int runID,
+                   const std::string& method, bool comparison) {
+  const auto workerRun = directory / "runs" / run.filename();
+  fs::create_directories(workerRun);
+  // 共通の対戦履歴を複製し、正解情報は評価側に残す。
+  io::writeRatingSnapshot(runID, workerRun);
+  for (const auto* name : {"players.csv", "matches.csv"})
+    fs::copy_file(run / name, workerRun / name);
+  if (comparison && method == "AdvantageElo")
+    fs::copy_file(run / "conditions.csv", workerRun / "conditions.csv");
+  if (method == "rankedGlicko2") {
+    const auto baseline = directory / "samples/glicko_baseline";
+    fs::create_directories(baseline);
+    fs::copy_file(project10::evaluation::fixedReferenceDirectory(runID) / "glicko2_rating.csv",
+                  baseline / "glicko2_rating.csv");
+  }
+}
+
+void publishPredictions(const fs::path& workerRun, const fs::path& run, int runID,
+                        const std::string& method, bool saveFinalRatings, bool comparison) {
+  const auto config = io::loadEvaluationConfig(runID, method);
+  const bool finalRatings = saveFinalRatings && method == "Glicko2";
+  std::vector<std::string> files{config.predictionsFile};
+  if (finalRatings) files.push_back("glicko2_rating.csv");
+  if (comparison && method == "AdvantageElo") files.push_back("online_predictions.csv");
+  for (const auto& file : files) {
+    const auto source = workerRun / file;
+    if (!fs::is_regular_file(fs::symlink_status(source)) || fs::file_size(source) == 0)
+      throw std::runtime_error("出力CSVがありません、または空です: " + file);
+  }
+  if (finalRatings)
+    io::readGlicko2RatingsCsv((workerRun / "glicko2_rating.csv").string(), config.numPlayers);
+
+  std::size_t published = 0;
+  try {
+    for (const auto& file : files) {
+      fs::create_hard_link(workerRun / file, run / file);
+      ++published;
+    }
+  } catch (...) {
+    // 予測と付随CSVを揃えて保存し、既存のファイルには触れない。
+    while (published > 0) {
+      const auto destination = run / files[--published];
+      std::error_code error;
+      fs::remove(destination, error);
+      if (error) std::cerr << "保存途中のCSVを削除できません: " << destination.string() << '\n';
+    }
+    throw;
+  }
+}
 }  // namespace
 
 int main(int argc, char** argv) {
   std::string stage = "設定確認";
   try {
     bool png = false, reuse = false, allMethods = false, comparison = false, ranking = false;
+    std::size_t jobs = 1;
     std::string gnuplot = "gnuplot", name = "graphs";
     for (int i = 1; i < argc; ++i) {
       const std::string option = argv[i];
@@ -59,13 +115,21 @@ int main(int argc, char** argv) {
       else if (option == "--ranked-reference-run")
         throw std::invalid_argument("--ranked-reference-runは使用できません。固定の参照分布を使うには、新しいrunで--all-methodsを指定してください。");
       else if (option == "--reuse-existing") reuse = true;
-      else if (option == "--gnuplot" && i + 1 < argc) gnuplot = argv[++i];
+      else if (option == "--jobs") {
+        if (++i == argc) throw std::invalid_argument("--jobsには正の整数を指定してください。");
+        const std::string_view value = argv[i];
+        const auto end = value.data() + value.size();
+        const auto parsed = std::from_chars(value.data(), end, jobs);
+        if (parsed.ec != std::errc{} || parsed.ptr != end || jobs == 0)
+          throw std::invalid_argument("--jobsには正の整数を指定してください。");
+      } else if (option == "--gnuplot" && i + 1 < argc) gnuplot = argv[++i];
       else if (option == "--name" && i + 1 < argc) name = argv[++i];
       else if (option == "--help") {
-        std::cout << "project10_run [--all-methods] [--comparison] [--ranking] [--reuse-existing] [--png] [--name graphs] [--gnuplot executable]\n"
+        std::cout << "project10_run [--all-methods] [--comparison] [--ranking] [--reuse-existing] [--jobs N] [--png] [--name graphs] [--gnuplot executable]\n"
                      "既定では4手法を実行します。--all-methodsを指定すると、固定の参照分布を使って6手法を実行します。\n"
                      "--comparisonを指定すると、先手・後手の条件付き評価を行います。6手法を評価する場合は--all-methodsも指定してください。\n"
-                     "--rankingを指定すると、順位距離の評価CSVとグラフも生成します。\n";
+                     "--rankingを指定すると、順位距離の評価CSVとグラフも生成します。\n"
+                     "--jobs 2を指定すると、最大2手法の予測CSVを並列に生成します。既定は1です。\n";
         return 0;
       } else throw std::invalid_argument("不正なオプションです: " + option);
     }
@@ -133,61 +197,50 @@ int main(int argc, char** argv) {
         fs::create_hard_link(workspace.path / "reference-ratings.csv", saved / "glicko2_rating.csv");
       }
     }
-    const auto workerRun = workspace.path / "runs" / run.filename();
-    fs::create_directories(workerRun);
-    // 推定器の作業先には正解情報を置かず、共有入力を一度だけ複製する。
-    io::writeRatingSnapshot(runID, workerRun);
-    for (const auto* name : {"players.csv", "matches.csv"})
-      fs::copy_file(run / name, workerRun / name);
     const auto stdinPath = workspace.path / "stdin.txt";
     writeText(stdinPath, std::to_string(runID) + "\n");
-    for (const auto& method : methods) {
-      if (plan.predictions.count(method)) {
-        std::cout << "再利用: " << method << "予測\n";
-      } else {
+    for (std::size_t first = 0; first < methods.size();) {
+      // 子の破棄時に終了を待ってから作業先を削除する。
+      const Workspace batch(workspace.path / "workers");
+      std::vector<std::unique_ptr<io::ChildProcess>> children(methods.size() - first);
+      std::size_t started = 0;
+      std::size_t next = first;
+      for (; next < methods.size() && started < jobs; ++next) {
+        const auto& method = methods[next];
+        if (plan.predictions.count(method)) continue;
         stage = method + "予測";
         std::cout << stage << '\n' << std::flush;
+        const auto directory = batch.path / method;
+        prepareWorker(directory, run, runID, method, comparison);
         const bool direct = method != "Glicko" && method != "TrueSkill";
-        if (method == "rankedGlicko2") {
-          // ranked Glicko-2が参照する相対パスに、保存済みの分布を配置する。
-          const auto baseline = workspace.path / "samples/glicko_baseline";
-          fs::create_directories(baseline);
-          fs::copy_file(project10::evaluation::fixedReferenceDirectory(runID) / "glicko2_rating.csv",
-            baseline / "glicko2_rating.csv");
-        }
-        if (comparison && method == "AdvantageElo")
-          fs::copy_file(run / "conditions.csv", workerRun / "conditions.csv");
         const auto program = sibling(argv[0], direct ? "project10_predict" :
           (method == "Glicko" ? "project10_glicko" : "project10_trueskill"));
-        io::runProcess(program, direct ? std::vector<std::string>{std::to_string(runID), method} :
-          std::vector<std::string>{}, workspace.path, stdinPath);
-        const auto config = io::loadEvaluationConfig(runID, method);
-        if ((allMethods || comparison) && method == "Glicko2") {
-          const auto ratings = workerRun / "glicko2_rating.csv";
-          if (!fs::is_regular_file(fs::symlink_status(ratings)))
-            throw std::runtime_error("Glicko2の最終レートCSVがありません。");
-          io::readGlicko2RatingsCsv(ratings.string(), config.numPlayers);
-          fs::create_hard_link(ratings, run / "glicko2_rating.csv");
-          fs::remove(ratings);
-        }
-        fs::create_hard_link(workerRun / config.predictionsFile, run / config.predictionsFile);
-        fs::remove(workerRun / config.predictionsFile);
-        if (method == "rankedGlicko2") fs::remove(workspace.path / "samples/glicko_baseline/glicko2_rating.csv");
-        if (comparison && method == "AdvantageElo") {
-          fs::create_hard_link(workerRun / "online_predictions.csv", run / "online_predictions.csv");
-          fs::remove(workerRun / "online_predictions.csv");
-          fs::remove(workerRun / "conditions.csv");
-        }
+        const auto arguments = direct ? std::vector<std::string>{std::to_string(runID), method} :
+          std::vector<std::string>{};
+        children[next - first] = std::make_unique<io::ChildProcess>(program, arguments, directory, stdinPath);
+        ++started;
       }
-      const auto runEvalStep = [&](bool reused, const std::string& label, const std::string& stageSuffix, auto fn) {
-        if (reused) { std::cout << "再利用: " << method << ' ' << label << '\n'; return; }
-        stage = method + ' ' + stageSuffix; std::cout << stage << '\n' << std::flush;
-        const auto result = fn(runID, method, &lock);
-        if (!result.cleanupWarning.empty())
-          std::cerr << "一時ファイルを削除できません: " << result.cleanupWarning.string() << '\n';
-      };
-      runEvalStep(plan.mse.count(method) != 0, "MSE", "MSE評価", project10::evaluation::evaluateRun);
-      if (ranking) runEvalStep(plan.ranking.count(method) != 0, "順位評価", "順位評価", project10::evaluation::evaluateRunRanking);
+      for (std::size_t i = first; i < next; ++i) {
+        const auto& method = methods[i];
+        if (const auto& child = children[i - first]) {
+          stage = method + "予測";
+          child->wait();
+          publishPredictions(batch.path / method / "runs" / run.filename(), run, runID, method,
+                             allMethods || comparison, comparison);
+        } else {
+          std::cout << "再利用: " << method << "予測\n";
+        }
+        const auto runEvalStep = [&](bool reused, const std::string& label, const std::string& stageSuffix, auto fn) {
+          if (reused) { std::cout << "再利用: " << method << ' ' << label << '\n'; return; }
+          stage = method + ' ' + stageSuffix; std::cout << stage << '\n' << std::flush;
+          const auto result = fn(runID, method, &lock);
+          if (!result.cleanupWarning.empty())
+            std::cerr << "一時ファイルを削除できません: " << result.cleanupWarning.string() << '\n';
+        };
+        runEvalStep(plan.mse.count(method) != 0, "MSE", "MSE評価", project10::evaluation::evaluateRun);
+        if (ranking) runEvalStep(plan.ranking.count(method) != 0, "順位評価", "順位評価", project10::evaluation::evaluateRunRanking);
+      }
+      first = next;
     }
     if (comparison && !plan.onlineMetrics) {
       stage = "試合前評価";

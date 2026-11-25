@@ -409,6 +409,8 @@ run ID、続いて `Elo`・`Glicko`・`Glicko2`・`TrueSkill`・`AdvantageElo`�
 
 run IDを入力すると、生成1回 → Elo・Glicko・Glicko-2・TrueSkillの予測と各MSE → 比較グラフを順に実行します。`--png` を省略するとSVGのみです。gnuplotがPATHにない場合は `--gnuplot /path/to/gnuplot` で指定します。生成・各予測・MSE・`graphs/mse.svg`（必要なら `mse.png`）は同じ `runs/run_XXXX/` に保存します。既存CLIの個別実行も引き続き利用できます。
 
+`--jobs 2` を付けると、同じrunで最大2手法の予測CSVを並列に生成します。既定は `--jobs 1` です。`--all-methods` や `--reuse-existing` と併用でき、再利用時は予測CSVが未生成の手法だけを起動します。各手法は専用の一時領域で動き、親プロセスが順に成果物を保存・評価します。
+
 4手法の `files.predictions`・`files.mse` には設定例と同じ規定名が必要です。現Glicko-2実装に合わせ、一括実行は `rating_period_matches_per_player=10`、`evaluation_interval_matches_per_player=10`、`matches_per_player` は10の倍数に限定します。条件が合わない場合は生成前に停止し、黙って補正しません。手法固有の数式・定数・更新順は変更していません。
 
 Glickoの初期レート・RD・`rd_growth` も明示指定が必要です。設定例にはこの項目がないため、利用者が条件を決めて追加してください。以下は静的能力での動作確認用の指定例で、正式比較の採用値を決めるものではありません。
