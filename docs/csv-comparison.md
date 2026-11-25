@@ -25,6 +25,7 @@ Windowsでは実行ファイルを `.\build\dev\project10_evaluate.exe`・`.\bui
 - CSVは通常ファイルを指定します。相対パスは実行時の作業ディレクトリ基準、絶対パスも使用できます。空白を含む引数はシェルの規則に従って引用してください。
 - 出力名は英数字・ハイフン・アンダースコアです。出力先は `runs/comparisons/<name>/`。評価と描画には異なる名前を指定します。
 - 描画はgnuplotが必要です。`--png` でPNGを追加し、`--gnuplot executable` で実行ファイルを指定できます。両CLIとも `--help` で使い方を表示します。
+- `--ranking` を指定すると、期待勝利数スコアの順位距離（`expected_wins_borda_half_tie_v2`）を評価・描画できます。評価では `series_XXXX_ranking.csv`（列 `run_id,matches_per_player,kendall_distance,weighted_kendall_distance,normalized_weighted_kendall_distance`）、描画では3指標（`ranking_kendall`・`ranking_weighted_kendall`・`ranking_normalized_weighted_kendall`）を出力し、`plot.gp` と `manifest.json` に定義を記録します。条件付き6列予測は $z=\pm 1$ を等重み平均して順位スコアを作ります。 順位CSV自体には定義IDがないため、描画前に入力の来歴を確認してください。旧定義の順位CSVは予測CSVから再評価してください。
 
 ## 入力と評価定義
 

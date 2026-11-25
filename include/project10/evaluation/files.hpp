@@ -22,6 +22,7 @@ struct FileOptions {
   bool png = false;
   std::string gnuplot = "gnuplot";
   bool help = false;
+  bool ranking = false;
   std::vector<std::string> arguments;
 };
 
@@ -56,6 +57,7 @@ private:
 };
 
 std::filesystem::path evaluateFiles(const std::vector<CsvSeriesInput>& inputs,
-  const std::string& name, const std::vector<std::string>& arguments = {});
+  const std::string& name, const std::vector<std::string>& arguments = {},
+  bool ranking = false);
 
 }  // namespace project10::evaluation
