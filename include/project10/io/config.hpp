@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 #include "project10/ratings/advantage_elo.hpp"
+#include "project10/simulation/win_probability.hpp"
 
 namespace project10::io {
 
@@ -19,7 +20,7 @@ struct SimulationConfig {
   std::string playersFile;
   std::string latentParametersFile;
   std::string sourceText;
-  double performanceStd;
+  simulation::WinProbabilityModel winModel;
   std::string groundTruthFile;
   int matchesPerPlayer;
   int ratingPeriodMatchesPerPlayer;

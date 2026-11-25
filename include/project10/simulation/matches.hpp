@@ -1,5 +1,7 @@
 #pragma once
 
+#include "project10/simulation/win_probability.hpp"
+
 #include <cstdint>
 #include <vector>
 
@@ -15,6 +17,17 @@ struct Match {
 // parametersの添字がプレイヤーID。偶数人数・正の試合数と期間に限定する。
 // 1ラウンドに各人1試合。端数ラウンドは短い最終期間として保存する。
 // 潜在能力は生成専用とし、返す履歴には含めない。
+std::vector<Match> generateMatches(
+  const std::vector<double>& parameters,
+  int matchesPerPlayer,
+  int ratingPeriodMatchesPerPlayer,
+  const project10::simulation::WinProbabilityModel& model,
+  std::uint64_t matchingSeed,
+  std::uint64_t resultSeed,
+  double sideAdvantage = 0, std::uint64_t conditionSeed = 0, bool conditional = false
+);
+
+// 旧呼び出しは従来のプロビットモデルを使う。
 std::vector<Match> generateMatches(
   const std::vector<double>& parameters,
   int matchesPerPlayer,
