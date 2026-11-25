@@ -34,6 +34,7 @@ add_library(project10_core
   src/ratings/glicko.cpp
   src/ratings/elo.cpp
   src/ratings/advantage_elo.cpp
+  src/ratings/glicko2_tunable.cpp
 )
 target_include_directories(project10_core PUBLIC
   "${CMAKE_CURRENT_SOURCE_DIR}/include"
@@ -62,6 +63,13 @@ target_link_libraries(project10_predict PRIVATE project10_core)
 add_executable(project10_run src/run_main.cpp)
 target_link_libraries(project10_run PRIVATE project10_plotting)
 add_dependencies(project10_run project10_predict project10_glicko project10_trueskill)
+add_executable(project10_glicko2_tuning src/glicko2_tuning_main.cpp)
+target_link_libraries(project10_glicko2_tuning PRIVATE project10_core nlohmann_json::nlohmann_json)
+if(MSVC)
+  target_compile_options(project10_glicko2_tuning PRIVATE /W4 /utf-8)
+else()
+  target_compile_options(project10_glicko2_tuning PRIVATE -Wall -Wextra -Wpedantic)
+endif()
 if(MSVC)
   target_compile_options(project10_predict PRIVATE /utf-8)
   target_compile_options(project10_run PRIVATE /utf-8)
@@ -229,6 +237,17 @@ if(BUILD_TESTING)
     target_compile_options(glicko_tests PRIVATE /utf-8)
   endif()
   add_test(NAME glicko_unit COMMAND glicko_tests)
+  add_executable(glicko2_tunable_tests tests/glicko2_tunable_tests.cpp)
+  target_link_libraries(glicko2_tunable_tests PRIVATE project10_core)
+  if(MSVC)
+    target_compile_options(glicko2_tunable_tests PRIVATE /utf-8)
+  endif()
+  add_test(NAME glicko2_tunable_unit
+    COMMAND glicko2_tunable_tests "${CMAKE_CURRENT_BINARY_DIR}/test-work/glicko2-tunable-unit")
+  add_test(NAME cli_glicko2_tuning
+    COMMAND "${CMAKE_COMMAND}" "-DPROGRAM=$<TARGET_FILE:project10_glicko2_tuning>"
+      "-DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/test-work"
+      -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/glicko2_tuning.cmake")
   add_test(NAME cli_glicko
     COMMAND "${CMAKE_COMMAND}"
       "-DPROGRAM=$<TARGET_FILE:project10_glicko>"
