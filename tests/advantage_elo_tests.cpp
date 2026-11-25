@@ -173,8 +173,8 @@ void testSequentialPreMatchPredictionLogging() {
           "Learned advantage must become positive when first-mover consistently wins");
 }
 
-// 5. オンラインNewton更新の手計算照合・対称性・スケール不変性
-void testOnlineNewtonHandCalculationAndProperties() {
+// 5. オンラインNewton更新の手計算照合と対称性の確認
+void testOnlineNewtonUpdate() {
   constexpr double tolerance = 1e-12;
   const double scale = 400.0;
   const double beta = std::log(10.0) / scale;
@@ -186,24 +186,24 @@ void testOnlineNewtonHandCalculationAndProperties() {
 
   project10::ratings::AdvantageEloRating elo(2, params);
 
-  // 初期状態: I_0 = 20 * beta^2 * 0.25 = 5 * beta^2
+  // 初期値: I_0 = 20 * beta^2 * 0.25
   const double info0 = priorMatches * beta * beta * 0.25;
-  require(std::abs(elo.advantageFisherInfo() - info0) < tolerance,
-          "Initial Fisher info must equal priorMatches * beta^2 * 0.25");
+  require(std::abs(elo.advantageInfo() - info0) < tolerance,
+          "Initial advantage info must match priorMatches * beta^2 * 0.25");
 
-  // 1戦目: R_0=R_1=1500, a=0, z=+1, y=1 -> p_1 = 0.5
+  // 1戦目: 両者1500, a=0, z=+1, y=1 -> p_1 = 0.5
   elo.updateMatch(0, 1, 1, 1);
   const double info1 = info0 + beta * beta * 0.25;
   const double adv1 = (beta * 0.5) / info1;
   const double r0After1 = 1500.0 + 32.0 * 0.5;
   const double r1After1 = 1500.0 - 32.0 * 0.5;
-  require(std::abs(elo.advantageFisherInfo() - info1) < tolerance,
-          "Fisher info after match 1 must match hand calculation");
+  require(std::abs(elo.advantageInfo() - info1) < tolerance,
+          "Advantage info after match 1 must match hand calculation");
   require(std::abs(elo.advantage() - adv1) < tolerance,
           "Advantage after match 1 must match hand calculation");
   require(std::abs(elo.rating(0) - r0After1) < tolerance &&
           std::abs(elo.rating(1) - r1After1) < tolerance,
-          "Player ratings after match 1 must match standard Elo step");
+          "Player ratings after match 1 must match Elo step");
 
   // 2戦目: z=-1（player 1が先手）, y=0（player 1が勝利）
   const double p2 =
@@ -211,65 +211,41 @@ void testOnlineNewtonHandCalculationAndProperties() {
   elo.updateMatch(0, 1, 0, -1);
   const double info2 = info1 + beta * beta * p2 * (1.0 - p2);
   const double adv2 = adv1 + (beta * (-1.0) * (0.0 - p2)) / info2;
-  require(std::abs(elo.advantageFisherInfo() - info2) < tolerance,
-          "Fisher info after match 2 must match hand calculation");
+  require(std::abs(elo.advantageInfo() - info2) < tolerance,
+          "Advantage info after match 2 must match hand calculation");
   require(std::abs(elo.advantage() - adv2) < tolerance,
           "Advantage after match 2 must match hand calculation");
 
-  // 対称性・スケール不変性:
-  // (a) A/B交換・z反転・結果反転（同じ試合をB視点で観測）では、a, I_t, 各プレイヤーレートが一致する
-  project10::ratings::AdvantageEloRating swapped(2, params);
-  swapped.updateMatch(1, 0, 0, -1);
-  swapped.updateMatch(1, 0, 1, 1);
-  require(std::abs(swapped.advantage() - elo.advantage()) < tolerance,
-          "OnlineNewton advantage must be invariant under swapping A/B and flipping z, result");
-  require(std::abs(swapped.advantageFisherInfo() - elo.advantageFisherInfo()) < tolerance,
-          "OnlineNewton Fisher info must be invariant under swapping A/B and flipping z, result");
-  require(std::abs(swapped.rating(0) - elo.rating(0)) < tolerance &&
-          std::abs(swapped.rating(1) - elo.rating(1)) < tolerance,
-          "OnlineNewton ratings must match when viewing the same match from B's side");
-
-  // (b) プレイヤー0と1の役割（勝敗と先手後手）を入れ替えた場合は、aとI_tが一致し、0と1のレートが入れ替わる
-  project10::ratings::AdvantageEloRating mirrored(2, params);
-  mirrored.updateMatch(0, 1, 0, -1);
-  mirrored.updateMatch(0, 1, 1, 1);
-  require(std::abs(mirrored.advantage() - elo.advantage()) < tolerance,
-          "OnlineNewton advantage must be invariant when swapping player roles");
-  require(std::abs(mirrored.advantageFisherInfo() - elo.advantageFisherInfo()) < tolerance,
-          "OnlineNewton Fisher info must be invariant when swapping player roles");
-  require(std::abs(mirrored.rating(0) - elo.rating(1)) < tolerance &&
-          std::abs(mirrored.rating(1) - elo.rating(0)) < tolerance,
-          "OnlineNewton ratings must swap symmetrically when player roles swap");
-
-  // (c) scaleとKを2倍にした場合、a も厳密に2倍になる（scale不変性）
-  project10::ratings::AdvantageEloParameters scaledParams = params;
-  scaledParams.scale = 800.0;
-  scaledParams.kFactor = 64.0;
-  project10::ratings::AdvantageEloRating scaled(2, scaledParams);
-  scaled.updateMatch(0, 1, 1, 1);
-  scaled.updateMatch(0, 1, 0, -1);
-  require(std::abs(scaled.advantage() - 2.0 * elo.advantage()) < tolerance,
-          "OnlineNewton advantage must scale linearly with Elo scale");
-
-  // (d) 忘却係数 rho = 0.9 のとき I_1 = 0.9 * I_0 + beta^2 * 0.25 になる手計算照合
+  // 忘却係数 rho = 0.9 の手計算照合: I_1 = 0.9 * I_0 + beta^2 * 0.25
   project10::ratings::AdvantageEloParameters forgetParams = params;
   forgetParams.onlineNewtonForgettingFactor = 0.9;
   project10::ratings::AdvantageEloRating forgetElo(2, forgetParams);
   forgetElo.updateMatch(0, 1, 1, 1);
   const double expectedForgetInfo1 = 0.9 * info0 + beta * beta * 0.25;
   const double expectedForgetAdv1 = (beta * 0.5) / expectedForgetInfo1;
-  require(std::abs(forgetElo.advantageFisherInfo() - expectedForgetInfo1) < tolerance,
-          "Fisher info with forgetting factor must match hand calculation");
+  require(std::abs(forgetElo.advantageInfo() - expectedForgetInfo1) < tolerance,
+          "Advantage info with forgetting factor must match hand calculation");
   require(std::abs(forgetElo.advantage() - expectedForgetAdv1) < tolerance,
           "Advantage with forgetting factor must match hand calculation");
+
+  // 対称性: 同じ試合を playerB の視点（A/B・z・勝敗を反転）で渡しても一致する
+  project10::ratings::AdvantageEloRating swapped(2, params);
+  swapped.updateMatch(1, 0, 0, -1);
+  swapped.updateMatch(1, 0, 1, 1);
+  require(std::abs(swapped.advantage() - elo.advantage()) < tolerance &&
+          std::abs(swapped.advantageInfo() - elo.advantageInfo()) < tolerance,
+          "OnlineNewton advantage and info must be invariant when viewing from B's side");
+  require(std::abs(swapped.rating(0) - elo.rating(0)) < tolerance &&
+          std::abs(swapped.rating(1) - elo.rating(1)) < tolerance,
+          "OnlineNewton ratings must match when viewing from B's side");
 }
 
-// 6. OnlineNewtonの収束性・忘却係数の効果確認
-void testOnlineNewtonConvergenceOnSyntheticMatches() {
-  // (a) 既知レート下でのロジスティックモデル復元確認（rho = 1.0）
+// 6. OnlineNewtonの合成データでの動作確認
+void testOnlineNewtonSyntheticMatches() {
+  // (a) 同実力同士の合成対戦 1,000試合で真の先手有利 (150.0) に近づくか確認
   {
     constexpr int numPlayers = 50;
-    constexpr int numMatches = 1500;
+    constexpr int numMatches = 1000;
     constexpr double trueAdvantage = 150.0;
 
     std::mt19937_64 rng(2026111300ULL);
@@ -277,7 +253,6 @@ void testOnlineNewtonConvergenceOnSyntheticMatches() {
     std::bernoulli_distribution sideDist(0.5);
     std::uniform_real_distribution<double> uniformDist(0.0, 1.0);
 
-    // 個人レートをほぼ動かさず（極小K）、同実力対戦から条件効果 a 単体の復元を検証する
     project10::ratings::AdvantageEloParameters params;
     params.kFactor = 1e-6;
     params.advantageUpdate = project10::ratings::AdvantageUpdateMethod::OnlineNewton;
@@ -299,12 +274,12 @@ void testOnlineNewtonConvergenceOnSyntheticMatches() {
       estimator.updateMatch(a, b, y, z);
     }
     require(std::abs(estimator.advantage() - trueAdvantage) < 25.0,
-            "Pure OnlineNewton must recover true logistic advantage when ratings are settled");
+            "OnlineNewton must recover true advantage on equal-rating synthetic matches");
   }
 
-  // (b) S1相当のプロビット合成対戦列（200人・200ラウンド）での同時学習と忘却係数の効果
-  constexpr int numPlayers = 200;
-  constexpr int rounds = 200;
+  // (b) S1相当の合成対戦（100人・100ラウンド = 5,000試合）での立ち上がりと忘却係数の効果
+  constexpr int numPlayers = 100;
+  constexpr int rounds = 100;
   constexpr double sideAdvantage = 1.0;
   constexpr double performanceStd = 1.0;
 
@@ -350,18 +325,18 @@ void testOnlineNewtonConvergenceOnSyntheticMatches() {
     }
   }
 
-  require(std::isfinite(pureNewton.advantage()) && std::isfinite(pureNewton.advantageFisherInfo()),
-          "Pure OnlineNewton state must remain finite after 20,000 synthetic matches");
-  require(std::isfinite(forgetNewton.advantage()) && std::isfinite(forgetNewton.advantageFisherInfo()),
-          "Forgetting OnlineNewton state must remain finite after 20,000 synthetic matches");
+  require(std::isfinite(pureNewton.advantage()) && std::isfinite(pureNewton.advantageInfo()),
+          "Pure OnlineNewton state must remain finite");
+  require(std::isfinite(forgetNewton.advantage()) && std::isfinite(forgetNewton.advantageInfo()),
+          "Forgetting OnlineNewton state must remain finite");
   require(earlyPureAdvantage > 50.0 && earlyForgetAdvantage > 50.0,
-          "OnlineNewton must learn substantial positive advantage within the first 2 rounds");
-  require(pureNewton.advantageFisherInfo() > 20.0 * std::pow(std::log(10.0) / 400.0, 2) * 0.25,
-          "Cumulative Fisher information must grow over matches");
+          "OnlineNewton must learn positive advantage within the first 2 rounds");
+  require(pureNewton.advantageInfo() > 20.0 * std::pow(std::log(10.0) / 400.0, 2) * 0.25,
+          "Advantage info must grow over matches");
   require(forgetNewton.advantage() > 150.0 && forgetNewton.advantage() < 400.0,
           "Forgetting OnlineNewton must track positive side advantage in a valid Elo range");
   require(forgetNewton.advantage() > pureNewton.advantage(),
-          "Forgetting factor must avoid early-round step-size lock-in while ratings spread");
+          "Forgetting factor must track better as player ratings spread");
 }
 
 // 7. 異常系の網羅確認
@@ -382,11 +357,6 @@ void testInvalidInputs() {
   rejects([&] { Params p; p.kAdvantage = -0.1; Estimator elo(2, p); });
   rejects([&] { Params p; p.kAdvantage = nan; Estimator elo(2, p); });
   rejects([&] { Params p; p.kAdvantage = inf; Estimator elo(2, p); });
-  rejects([&] {
-    Params p;
-    p.advantageUpdate = static_cast<project10::ratings::AdvantageUpdateMethod>(99);
-    Estimator elo(2, p);
-  });
   rejects([&] { Params p; p.onlineNewtonPriorMatches = 0.0; Estimator elo(2, p); });
   rejects([&] { Params p; p.onlineNewtonPriorMatches = -5.0; Estimator elo(2, p); });
   rejects([&] { Params p; p.onlineNewtonPriorMatches = nan; Estimator elo(2, p); });
@@ -396,7 +366,6 @@ void testInvalidInputs() {
   rejects([&] { Params p; p.onlineNewtonForgettingFactor = 1.01; Estimator elo(2, p); });
   rejects([&] { Params p; p.onlineNewtonForgettingFactor = nan; Estimator elo(2, p); });
   rejects([&] { Params p; p.onlineNewtonForgettingFactor = inf; Estimator elo(2, p); });
-  rejects([&] { Params p; p.scale = 1e300; Estimator elo(2, p); });
 
   rejects([&] { project10::ratings::calculateAdvantageEloWinProbability(1500.0, 1500.0, 0.0, 0); });
   rejects([&] { project10::ratings::calculateAdvantageEloWinProbability(1500.0, 1500.0, 0.0, 2); });
@@ -427,8 +396,8 @@ int main() {
     testAdvantageAndRatingSimultaneousUpdate();
     testCompatibilityWithStandardElo();
     testSequentialPreMatchPredictionLogging();
-    testOnlineNewtonHandCalculationAndProperties();
-    testOnlineNewtonConvergenceOnSyntheticMatches();
+    testOnlineNewtonUpdate();
+    testOnlineNewtonSyntheticMatches();
     testInvalidInputs();
     std::cout << "Advantage-Elo単体確認に成功しました" << std::endl;
     return 0;

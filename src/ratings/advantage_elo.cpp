@@ -32,12 +32,12 @@ EloParameters toBaseEloParameters(const AdvantageEloParameters& params) {
   };
 }
 
-double initialFisherInfo(const AdvantageEloParameters& params) {
+double initialAdvantageInfo(const AdvantageEloParameters& params) {
   const double beta = std::log(10.0) / params.scale;
-  // 互角の試合 (p_A = 0.5) 1戦あたりのFisher情報量は beta^2 * 0.25。
+  // 互角の試合 (p_A = 0.5) 1戦あたりの情報量は beta^2 * 0.25。
   const double info = params.onlineNewtonPriorMatches * beta * beta * 0.25;
   if (!std::isfinite(info) || info <= 0.0) {
-    throw std::invalid_argument("onlineNewtonPriorMatches produces invalid initial Fisher information");
+    throw std::invalid_argument("onlineNewtonPriorMatches produces invalid initial advantage info");
   }
   return info;
 }
@@ -78,7 +78,7 @@ AdvantageEloRating::AdvantageEloRating(
 ) : params_(params),
     baseElo_(numPlayers, toBaseEloParameters(params)),
     advantage_(params.initialAdvantage),
-    advantageFisherInfo_(initialFisherInfo(params)) {}
+    advantageInfo_(initialAdvantageInfo(params)) {}
 
 AdvantageEloRating::AdvantageEloRating(
   const std::vector<int>& players,
@@ -86,7 +86,7 @@ AdvantageEloRating::AdvantageEloRating(
 ) : params_(params),
     baseElo_(players, toBaseEloParameters(params)),
     advantage_(params.initialAdvantage),
-    advantageFisherInfo_(initialFisherInfo(params)) {}
+    advantageInfo_(initialAdvantageInfo(params)) {}
 
 int AdvantageEloRating::numPlayers() const noexcept {
   return baseElo_.numPlayers();
@@ -116,8 +116,8 @@ double AdvantageEloRating::advantage() const noexcept {
   return advantage_;
 }
 
-double AdvantageEloRating::advantageFisherInfo() const noexcept {
-  return advantageFisherInfo_;
+double AdvantageEloRating::advantageInfo() const noexcept {
+  return advantageInfo_;
 }
 
 double AdvantageEloRating::predictWinProbability(
@@ -148,17 +148,19 @@ void AdvantageEloRating::updateMatch(
   const double actualA = static_cast<double>(resultA);
   const double error = actualA - expectedA;
 
-  // 2. 条件効果 a（OnlineNewton時は累積Fisher情報量 I_t も含む）の更新後値を計算し事前検証
+  // 2. 条件効果 a（OnlineNewton時は累積情報量 I_t も含む）の更新後値を計算し事前検証
   double newAdvantage = advantage_;
-  double newFisherInfo = advantageFisherInfo_;
+  double newInfo = advantageInfo_;
   if (params_.advantageUpdate == AdvantageUpdateMethod::OnlineNewton) {
     const double beta = std::log(10.0) / params_.scale;
+    // 互角の試合 (p_A ≈ 0.5) ほど大きくなる情報の重み
     const double matchInfo = beta * beta * zVal * zVal * expectedA * (1.0 - expectedA);
-    newFisherInfo = params_.onlineNewtonForgettingFactor * advantageFisherInfo_ + matchInfo;
-    if (!std::isfinite(newFisherInfo) || newFisherInfo <= 0.0) {
-      throw std::runtime_error("Advantage Fisher information update resulted in an invalid value");
+    newInfo = params_.onlineNewtonForgettingFactor * advantageInfo_ + matchInfo;
+    if (!std::isfinite(newInfo) || newInfo <= 0.0) {
+      throw std::runtime_error("Advantage info update resulted in an invalid value");
     }
-    newAdvantage = advantage_ + (beta * zVal * error) / newFisherInfo;
+    // ズレを累積情報量で割って a を更新
+    newAdvantage = advantage_ + (beta * zVal * error) / newInfo;
   } else {
     newAdvantage = advantage_ + params_.kAdvantage * zVal * error;
   }
@@ -169,7 +171,7 @@ void AdvantageEloRating::updateMatch(
   // 3. 同じ試合前予測勝率 p_A に基づいて両者のレートを更新し、同時に a も更新
   (void)baseElo_.updateMatch(playerA, playerB, resultA, offsetA);
   advantage_ = newAdvantage;
-  advantageFisherInfo_ = newFisherInfo;
+  advantageInfo_ = newInfo;
 }
 
 void AdvantageEloRating::updateMatch(const Match& match, int z) {

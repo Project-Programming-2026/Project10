@@ -9,9 +9,9 @@ namespace project10::ratings {
 
 // 条件効果 a の更新規則。
 enum class AdvantageUpdateMethod {
-  // 固定学習率による更新（v0既定）: a' = a + kAdvantage * z * (y - p_A)
+  // 固定の更新幅による更新（v0既定）: a' = a + kAdvantage * z * (y - p_A)
   FixedStep,
-  // オンラインNewton法（累積Fisher情報量 I_t によるステップ幅の自動減衰）:
+  // 試合から得られた情報量 I_t を積み上げ、ズレを I_t で割ることで更新幅を自動調整する（オンラインNewton法）:
   //   I_t = rho * I_{t-1} + beta^2 * z^2 * p_A * (1 - p_A),  a' = a + beta * z * (y - p_A) / I_t
   //   ただし beta = ln(10) / scale、rho = onlineNewtonForgettingFactor ∈ (0, 1]、
   //   初期値 I_0 = onlineNewtonPriorMatches * beta^2 * 0.25
@@ -20,14 +20,14 @@ enum class AdvantageUpdateMethod {
 
 // Advantage-Elo（v0およびオンラインNewton拡張）のハイパーパラメータ。
 // 基本のElo設定（initialRating=1500, kFactor=32, scale=400; Elo 1978）に加え、
-// 全プレイヤー共通の条件効果 a（単位: Eloポイント）の初期値・更新規則・学習率を持つ。
+// 全プレイヤー共通の条件効果 a（単位: Eloポイント）の初期値・更新規則・設定値を持つ。
 // 着想の参考:
 // - 藤井慧 (2022)「非対称な対戦データを用いたスキルとアドバンテージの同時最尤推定」
 // - 高尾海州・松崎公紀 (2023)「初期局面の有利不利に適応したレーティング手法の検証」
 // ※FixedStepの a' = a + K_a * z * (y - p_A) は本プロジェクトのv0設計案であり、
-//   K_a は対数尤度勾配 ∂logL/∂a = (ln(10)/scale) * z * (y - p_A) の定数係数を吸収した実効学習率。
+//   K_a は対数尤度の傾き ∂logL/∂a = (ln(10)/scale) * z * (y - p_A) の定数係数をまとめた更新幅。
 //   K_a = 0.0 を指定するとFixedStep時は条件効果 a の学習を無効化できる（最終実験設定は比較前に別途固定する）。
-//   OnlineNewtonでは、負の2階微分（Fisher情報量）の累積 I_t で勾配を割って更新する。
+//   OnlineNewtonでは、試合ごとに積み上げた情報量 I_t で傾きを割ることで更新幅を自動で小さくする。
 struct AdvantageEloParameters {
   double initialRating = 1500.0;
   double kFactor = 32.0;
@@ -35,8 +35,9 @@ struct AdvantageEloParameters {
   double initialAdvantage = 0.0;
   double kAdvantage = 1.0;
   AdvantageUpdateMethod advantageUpdate = AdvantageUpdateMethod::FixedStep;
+  // 最初のブレーキ役となる仮想の事前試合数（正の有限値が必要）。
   double onlineNewtonPriorMatches = 20.0;
-  // OnlineNewton時のFisher情報量の忘却係数 rho ∈ (0, 1]。1.0で忘却なし（全試合累積）。
+  // 古い試合の重みを少しずつ減らす忘却係数 rho ∈ (0, 1]。1.0 で忘れない。
   double onlineNewtonForgettingFactor = 1.0;
 };
 
@@ -77,8 +78,8 @@ public:
   // 現在推定されている全プレイヤー共通の条件効果 a（Eloポイント単位）を返す。
   double advantage() const noexcept;
 
-  // OnlineNewtonで使用する累積Fisher情報量 I（FixedStep時は初期値 I_0）を返す。
-  double advantageFisherInfo() const noexcept;
+  // OnlineNewton で積み上げている情報量 I（FixedStep 時は初期値 I_0）を返す。
+  double advantageInfo() const noexcept;
 
   // 試合前の推定レートと条件効果 a に基づき、条件 z ∈ {+1, -1} のもとで
   // playerAがplayerBに勝つ予測確率 p_A（0〜1）を返す。
@@ -93,7 +94,7 @@ private:
   AdvantageEloParameters params_;
   EloRating baseElo_;
   double advantage_;
-  double advantageFisherInfo_;
+  double advantageInfo_;
 };
 
 }  // namespace project10::ratings
