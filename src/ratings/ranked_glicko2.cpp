@@ -1,4 +1,5 @@
 #include "project10/ratings/glicko2.hpp"
+#include "glicko_constants.hpp"
 
 #include <cmath>
 #include <vector>
@@ -21,7 +22,8 @@ static const double tau = 0.5; //ボラティリティの変動しやすさ
 static const double alpha = 0.25; //分布補正の最大補正幅
 static const double c = 0.01; //分布補正の感度
 static const double epsilon = 0.000001; //小さい定数
-static const double pi = atan(1) * 4;
+using project10::ratings::glicko_constants::pi;
+using project10::ratings::glicko_constants::q;
 
 class Player;
 class Distribution;
@@ -50,7 +52,7 @@ double g(double phi){
 }
 
 double g1(double rd){
-    return 1 / sqrt(1 + (3 * pow(0.0057565,2) * pow(rd,2))/pow(pi,2));
+    return 1 / sqrt(1 + (3 * pow(q,2) * pow(rd,2))/pow(pi,2));
 }
 
 double E(double mu,double muj,double phij){

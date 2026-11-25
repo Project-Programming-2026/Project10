@@ -2,6 +2,7 @@
 // 目的と数式の出典はglicko.hppを参照。
 
 #include "project10/ratings/glicko.hpp"
+#include "glicko_constants.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -14,9 +15,8 @@
 
 namespace {
 
-constexpr double pi = 3.14159265358979323846;
-// q = ln(10) / 400。10を底とするレート尺度を自然対数の尺度へ変換する。
-constexpr double q = 2.30258509299404568402 / 400.0;
+using project10::ratings::glicko_constants::pi;
+using project10::ratings::glicko_constants::q;
 
 // Step 2で使う、1人分の試合の集計値。
 struct GameSums {
