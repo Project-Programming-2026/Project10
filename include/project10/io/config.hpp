@@ -39,6 +39,7 @@ struct EvaluationConfig {
   int interval;
   std::string predictionsFile;
   std::string mseFile;
+  std::string rankingFile;
   bool conditional = false;
 };
 
@@ -85,10 +86,12 @@ EvaluationConfig loadEvaluationConfig(int runID, const std::string& algorithm,
 
 struct PlotConfig {
   int runID;
+  int numPlayers;
   int matchesPerPlayer;
   int interval;
   std::map<std::string, std::string> mseFiles;
   std::string scenario;
+  std::map<std::string, std::string> rankingFiles;
 };
 
 // 描画には正解情報や予測CSVを必要としない。

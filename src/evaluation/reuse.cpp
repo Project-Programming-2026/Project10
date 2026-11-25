@@ -21,7 +21,7 @@ bool regularFile(const fs::path& path) {
 }  // namespace
 
 ReusePlan inspectReusableRun(int runID, const io::RunLock& lock, bool allMethods,
-                             bool comparison, int referenceRun) {
+                             bool comparison, int referenceRun, bool ranking) {
   const auto run = fs::path("runs") / io::runDirectoryName(runID);
   lock.requirePath(run.parent_path() / ("." + run.filename().string() + ".lock"));
   if (fs::is_symlink(run) || !fs::is_directory(run))
@@ -80,18 +80,39 @@ ReusePlan inspectReusableRun(int runID, const io::RunLock& lock, bool allMethods
     const auto evaluation = io::loadEvaluationConfig(runID, method);
     const bool prediction = regularFile(run / evaluation.predictionsFile);
     const bool mse = regularFile(run / evaluation.mseFile);
+    const bool rank = ranking && regularFile(run / evaluation.rankingFile);
     if (mse && !prediction) throw std::runtime_error(std::string(method) + ": MSEに対応する予測CSVがありません。");
+    if (rank && !prediction) throw std::runtime_error(std::string(method) + ": 順位評価に対応する予測CSVがありません。");
     if (!prediction) continue;
     const auto calculated = calculateRunMse(runID, method, &lock);
     plan.predictions.insert(method);
-    if (!mse) continue;
-    const auto cached = io::readMseCsv((run / evaluation.mseFile).string(), runID,
-      evaluation.matchesPerPlayer, evaluation.interval);
-    for (std::size_t i = 0; i < cached.size(); ++i) {
-      if (std::abs(cached[i].mse - calculated[i].mse) > 1e-12 + 1e-10 * std::abs(calculated[i].mse))
-        throw std::runtime_error(std::string(method) + ": 保存済みMSEが再計算値と一致しません。");
+    const auto withinTolerance = [](double actual, double expected) {
+      return std::abs(actual - expected) <= 1e-12 + 1e-10 * std::abs(expected);
+    };
+    if (mse) {
+      const auto cached = io::readMseCsv((run / evaluation.mseFile).string(), runID,
+        evaluation.matchesPerPlayer, evaluation.interval);
+      for (std::size_t i = 0; i < cached.size(); ++i) {
+        if (!withinTolerance(cached[i].mse, calculated[i].mse))
+          throw std::runtime_error(std::string(method) + ": 保存済みMSEが再計算値と一致しません。");
+      }
+      plan.mse.insert(method);
     }
-    plan.mse.insert(method);
+    if (ranking) {
+      const auto calculatedRank = calculateRunRanking(runID, method, &lock);
+      if (rank) {
+        const auto cachedRank = io::readRankingCsv((run / evaluation.rankingFile).string(), runID,
+          evaluation.matchesPerPlayer, evaluation.interval, evaluation.numPlayers);
+        for (std::size_t i = 0; i < cachedRank.size(); ++i) {
+          const auto& a = cachedRank[i]; const auto& b = calculatedRank[i];
+          if (!withinTolerance(a.kendallDistance, b.kendallDistance) ||
+              !withinTolerance(a.weightedKendallDistance, b.weightedKendallDistance) ||
+              !withinTolerance(a.normalizedWeightedKendallDistance, b.normalizedWeightedKendallDistance))
+            throw std::runtime_error(std::string(method) + ": 保存済み順位評価が再計算値と一致しません。");
+        }
+        plan.ranking.insert(method);
+      }
+    }
   }
   if (comparison) {
     const bool log = regularFile(run / "online_predictions.csv");
