@@ -15,3 +15,9 @@
 - 原典・版：[Herbrich, Minka, Graepel, *TrueSkill: A Bayesian Skill Rating System*, NIPS 2006版](https://www.microsoft.com/en-us/research/wp-content/uploads/2007/01/NIPS2006_0688.pdf)。§2–3・Table 1のモデルとモーメント整合を1対1・引き分けなしに適用し、初期値と定数は§4.2の尺度を採用する。
 - 数値計算：[NIST DLMF §7.9、式7.9.1](https://dlmf.nist.gov/7.9.E1)（Version 1.2.8、2026-09-15）。相補誤差関数の連分数を標準正規分布の裾へ変換して使う。
 - [採用した式・定数・近似・独立検証](trueskill.md)に、原典の仕様と本実装で選んだ数値計算上の条件を記録する。
+
+## ロジスティック勝率生成
+
+- 仕様の出発点は[第13回会議（2026-11-13）の拡張案](https://app.notion.com/p/416751d0ef6d809181a2f75fca13dbcc)。同ページの案を採用する利用者の実装依頼に基づく。正式なシード組・試行数・低／高の尺度は未確定。
+- 数式の参照：[NIST Dataplot Reference Manual, LOGCDF（1997-03-20）](https://www.itl.nist.gov/div898/software/dataplot/refman2/ch8/logcdf.pdf)、式8-261・8-262と標準偏差`pi/sqrt(3)`。文献の尺度記号`σ`を本実装では`s_g`とし、プロビットの各人の標準偏差`σ_g`と区別する。
+- [採用した式・尺度変換・数値安定化・独立検証](win-models.md)を参照。レーティング推定器の数式は変更しない。
