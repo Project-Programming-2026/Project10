@@ -25,7 +25,7 @@ std::optional<GenerationResult> generateRun(int runID, const ConfirmOverwrite& c
   );
   const auto matches = generateMatches(
     parameters, config.matchesPerPlayer, config.ratingPeriodMatchesPerPlayer,
-    config.performanceStd, config.matchingSeed, config.resultSeed,
+    config.winModel, config.matchingSeed, config.resultSeed,
     config.sideAdvantage, config.conditionSeed, config.conditional
   );
 
@@ -34,12 +34,21 @@ std::optional<GenerationResult> generateRun(int runID, const ConfirmOverwrite& c
   const auto lockPath = fs::path("runs") / ("." + outputDir.filename().string() + ".lock");
   if (borrowedLock) borrowedLock->requirePath(lockPath);
   const auto lock = borrowedLock ? nullptr : std::make_unique<io::RunLock>(lockPath);
-  if (!fs::create_directory(outputDir)) {
+  const bool created = fs::create_directory(outputDir);
+  if (!created) {
     if (fs::is_symlink(outputDir) || !fs::is_directory(outputDir)) {
       throw std::runtime_error("Output path must be a regular directory.");
     }
     if (config.conditional || fs::exists(fs::symlink_status(outputDir / "conditions.csv")))
       throw std::runtime_error("比較用runは上書きできません。新しいrun IDを使用してください。");
+    const auto savedConfig = outputDir / "config.json";
+    // リンク先・共有ファイルは読まず、後続の出力先検査で拒否する。
+    const bool readableSnapshot = fs::is_regular_file(fs::symlink_status(savedConfig)) &&
+                                  fs::hard_link_count(savedConfig) == 1;
+    if (std::holds_alternative<LogisticModel>(config.winModel) ||
+        (readableSnapshot &&
+         std::holds_alternative<LogisticModel>(io::loadConfig(runID, "runs").winModel)))
+      throw std::runtime_error("生成モデルを変更・再生成する場合は新しいrun IDを使用してください。");
     if (!confirm || !confirm(outputDir)) return std::nullopt;
   }
 
@@ -62,12 +71,12 @@ std::optional<GenerationResult> generateRun(int runID, const ConfirmOverwrite& c
 
   writePlayers(players, (outputDir / config.playersFile).string());
   writeLatentParameters(parameters, (outputDir / config.latentParametersFile).string());
-  writeGroundTruth(parameters, config.performanceStd, (outputDir / config.groundTruthFile).string(), config.sideAdvantage);
+  writeGroundTruth(parameters, config.winModel, (outputDir / config.groundTruthFile).string(), config.sideAdvantage);
   writeMatches(matches, (outputDir / config.matchesFile).string());
   if (config.conditional) {
     io::writeConditions(matches, (outputDir / "conditions.csv").string());
-    writeGroundTruth(parameters, config.performanceStd, (outputDir / "ground_truth_positive.csv").string(), config.sideAdvantage, 1);
-    writeGroundTruth(parameters, config.performanceStd, (outputDir / "ground_truth_negative.csv").string(), config.sideAdvantage, -1);
+    writeGroundTruth(parameters, config.winModel, (outputDir / "ground_truth_positive.csv").string(), config.sideAdvantage, 1);
+    writeGroundTruth(parameters, config.winModel, (outputDir / "ground_truth_negative.csv").string(), config.sideAdvantage, -1);
   }
   io::writeConfigSnapshot(config, outputDir);
   return GenerationResult{config.numPlayers, outputDir};

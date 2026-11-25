@@ -146,6 +146,7 @@ $$
 │       ├── players.cpp            プレイヤーIDの生成
 │       ├── latent_parameters.cpp  潜在能力の生成
 │       ├── probit.cpp             プロビットモデルによる真の勝率計算
+│       ├── win_probability.cpp    モデル切替・条件付き勝率・ロジスティック計算
 │       └── matches.cpp            ラウンドごとのペア分け・勝敗生成
 ├── tests/
 │   ├── reuse.cmake               再利用・途中工程からの実行・不正入力・gnuplotでの描画
@@ -280,12 +281,15 @@ Visual StudioのDebugビルドでは `.\build\vs\Debug\project10.exe` を実行�
 | `matchmaking` | `uniform_random` のみ。後述するラウンド単位のシャッフル方式 |
 | `ability_distribution` | `type` は `normal`、有限な `mean` と正の有限な `std` |
 | `seeds` | 非負の64ビット整数。`ability` は潜在能力、`matching` はペア分け、`result` は勝敗に使用 |
-| `performance_std` | 正の有限値。真の勝率を計算する際の共通のパフォーマンス標準偏差 |
-| `model` | 実装した生成式と記録を一致させるため、`probit_1d` のみ許可 |
+| `performance_std` | `probit_1d`で必須の正の有限値。各人のパフォーマンス標準偏差 |
+| `logistic_scale` | `logistic_1d`で必須の正の有限値。誤差差分の尺度。`performance_std`との併記は拒否 |
+| `model` | `probit_1d`または`logistic_1d`。モデル名の省略・未知名は拒否 |
 | `files` | 出力名は `players.csv`・`latent_parameters.csv`・`ground_truth.csv`・`matches.csv` に限定 |
 | その他の実験条件 | スナップショットへ保持。生成時は評価を実行せず、評価用プログラムが保存済みの評価間隔と手法別ファイル名を使用する |
 
-設定の欠落・不正JSON・同じオブジェクト内の重複キー・型や範囲の誤りは、エラーを表示して終了コード1で終了します。真の勝率計算はプロビットモデルに固定し、`probit_1d` 以外のモデルは拒否します。`matchmaking` は `uniform_random` 以外を拒否します。将来の全入出力を検証するJSON Schemaは未整備です。
+設定の欠落・不正JSON・同じオブジェクト内の重複キー・型や範囲の誤りは、エラーを表示して終了コード1で終了します。モデルに対応しない尺度の指定も拒否します。`matchmaking` は `uniform_random` 以外を拒否します。将来の全入出力を検証するJSON Schemaは未整備です。
+
+ロジスティックモデルの小規模な設定例は[configs/run_0010/config.json](configs/run_0010/config.json)です。`project10_run`でrun ID `10`を指定し、6手法なら`--all-methods`も付けます。既存runがある場合は未使用IDへ設定をコピーし、`run_id`も変更してください。既存プロビット設定の変更は不要です。[数式・尺度変換・S0/S1・処理フロー・独立検証](docs/win-models.md)に採用した実装判断を記載しています。
 
 ### 対戦生成方式（実装案）
 
@@ -293,11 +297,11 @@ Visual StudioのDebugビルドでは `.\build\vs\Debug\project10.exe` を実行�
 
 これは第7回会議の「ランダムに選択」を、各人の対戦数が揃う形へ具体化した実装案です。無制約に毎試合2人を独立抽選する方式とは対戦履歴の分布が異なるため、正式な比較への採用はチームで最終確認してください。
 
-ペア分け用の `std::mt19937_64` は `seeds.matching`、勝敗用は `seeds.result` で実行開始時に一度だけ初期化します。各対戦のA側の真の勝率を既存の `calculateWinProbability()` で計算し、`std::bernoulli_distribution` から勝敗を生成します。`ground_truth.csv` の再読み込みは行いません。能力は `seeds.ability` で別に生成し、勝敗や能力の乱数消費がペア分けを変えないようにします。
+ペア分け用の `std::mt19937_64` は `seeds.matching`、勝敗用は `seeds.result` で実行開始時に一度だけ初期化します。各対戦のA側の真の勝率を共通APIの `winProbability()` で計算し、`std::bernoulli_distribution` から勝敗を生成します。プロビットでは従来の計算関数を呼びます。`ground_truth.csv` の再読み込みは行いません。能力は `seeds.ability` で別に生成し、勝敗や能力の乱数消費がペア分けを変えないようにします。
 
 ### 出力と上書き確認
 
-成功時は次の5ファイル（設定と4つのCSV）を出力します。既存の `runs/run_XXXX/` がある場合は、空でも `Overwrite config.json and the 4 generated CSV files? [y/N]:` と確認します。`y` または `Y` を入力した場合だけ、この5ファイルを現在の設定で上書きします。空欄・`n`・その他の入力・入力終了では、既存ファイルを変更せず終了コード1で中止します。フォルダー全体や無関係なファイルは削除しません。
+成功時は次の5ファイル（設定と4つのCSV）を出力します。プロビットの開発用runでは、既存の `runs/run_XXXX/` がある場合は空でも `Overwrite config.json and the 4 generated CSV files? [y/N]:` と確認します。`y` または `Y` を入力した場合だけ、この5ファイルを現在の設定で上書きします。ロジスティックを含む既存runの再生成・モデル切替と比較用runの上書きは、確認に同意しても拒否します。空欄・`n`・その他の入力・入力終了では、既存ファイルを変更せず終了コード1で中止します。フォルダー全体や無関係なファイルは削除しません。
 
 上書きは開発中の動作確認用です。正式な比較実験の結果は、新しいrun IDで保存してください。同じシードでも人数・分布・`performance_std`・コード・実行環境が変われば結果が変わる可能性があります。
 
@@ -314,7 +318,7 @@ runs/run_XXXX/
 └── matches.csv             列：match_id,period_id,player_a,player_b,result_a
 ```
 
-`ground_truth.csv` は自己対戦を除く `i < j` の各ペアについて、`player_a` が勝つ確率を保存します。逆方向は `1 - p_a_wins` で復元できます。人数を `N` とするとデータ行数は `N(N-1)/2` で、8人では28行、1,000人では499,500行（いずれもヘッダーを除く）です。浮動小数点数は `max_digits10` の精度で出力します。計算には `std::erfc()` を用い、能力は有限値、パフォーマンス標準偏差は正の有限値に限定します。勝率の計算に追加の乱数は使いません。
+`ground_truth.csv` は自己対戦を除く `i < j` の各ペアについて、`player_a` が勝つ確率を保存します。逆方向は `1 - p_a_wins` で復元できます。人数を `N` とするとデータ行数は `N(N-1)/2` で、8人では28行、1,000人では499,500行（いずれもヘッダーを除く）です。浮動小数点数は `max_digits10` の精度で出力します。プロビットは `std::erfc()`、ロジスティックはオーバーフローを避ける形の指数計算を使います。能力は有限値、選択したモデルの尺度は正の有限値に限定します。勝率の計算に追加の乱数は使いません。
 
 JSONの未使用項目もスナップショットに残します。潜在能力と真の勝率は生成・評価・検証専用であり、将来のレーティング手法へ渡しません。書き込み失敗時には一部のファイルだけが作成・更新される場合があります。同じrun IDで再実行すると再び上書きを確認します。失敗した試行の結果も担当者が確認・保管し、正式な比較実験は別のrun IDで記録してください。
 
@@ -607,7 +611,7 @@ Get-FileHash .\runs\run_0001\config.json, .\runs\run_0001\players.csv, .\runs\ru
 | JSON・共有するCSV入出力 | 実装は `src/io/`、公開ヘッダーは `include/project10/io/` |
 | テスト・グラフ生成 | テストは `tests/`、C++の描画は `src/evaluation/plot.cpp`・`include/project10/evaluation/plot.hpp` |
 
-この表の未実装領域のディレクトリは、実際のファイル追加時に作成します。各担当は小さな処理単位で実装し、共通利用する操作のみをヘッダーで公開します。`players.cpp`、`latent_parameters.cpp` は生成処理を担当し、`generatePlayers(int)` はIDの配列、`generateLatentParameters(...)` は潜在能力の配列を返します。`probit.cpp` の `calculateWinProbability(...)` は2人の潜在能力とパフォーマンス標準偏差から真の勝率を返します。`matches.cpp` の `generateMatches(...)` は対戦履歴の配列を返し、潜在能力・正解勝率は履歴に含めません。CSV出力は `io/csv.hpp` の `writePlayers`・`writeLatentParameters`・`writeGroundTruth`・`writeMatches` が担当し、`main.cpp` で接続します。
+この表の未実装領域のディレクトリは、実際のファイル追加時に作成します。各担当は小さな処理単位で実装し、共通利用する操作のみをヘッダーで公開します。`players.cpp`、`latent_parameters.cpp` は生成処理を担当し、`generatePlayers(int)` はIDの配列、`generateLatentParameters(...)` は潜在能力の配列を返します。`probit.cpp` の `calculateWinProbability(...)` は2人の潜在能力とパフォーマンス標準偏差から真の勝率を返します。`win_probability.cpp` の `winProbability()` はモデルを切り替え、通常・条件付きの真の勝率を返します。公開型とAPIは `simulation/win_probability.hpp` にあります。`matches.cpp` の `generateMatches(...)` は対戦履歴の配列を返し、潜在能力・正解勝率は履歴に含めません。CSV出力は `io/csv.hpp` の `writePlayers`・`writeLatentParameters`・`writeGroundTruth`・`writeMatches` が担当し、`main.cpp` で接続します。
 
 レーティング本体へ正解情報が混入しない境界を維持し、各手法の出力は共通の評価処理へ渡します。提案手法は `ratings`、マッチングの変更は `simulation` に追加し、比較対象・対戦履歴への影響を記録します。
 

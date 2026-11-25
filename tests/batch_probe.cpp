@@ -42,7 +42,8 @@ int main(int argc, char** argv) {
         throw std::runtime_error("推定器の入力は設定・ID・対戦履歴だけにしてください。");
       std::ifstream snapshot(run / "config.json");
       const std::string settings((std::istreambuf_iterator<char>(snapshot)), {});
-      for (const auto* name : {"side_advantage", "condition_seed", "ability_distribution", "performance_std", "\"seeds\""})
+      for (const auto* name : {"side_advantage", "condition_seed", "ability_distribution", "performance_std",
+                               "logistic_scale", "\"model\"", "\"seeds\""})
         if (settings.find(name) != std::string::npos)
           throw std::runtime_error("推定器へ真の生成条件を渡しています。");
       auto real = fs::path(argv[0]).parent_path() / "real_project10_predict";
