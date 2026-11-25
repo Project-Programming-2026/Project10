@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0",
+  "num_players": 1000,
+  "matches_per_player": 200,
+  "rating_period_matches_per_player": 10,
+  "evaluation_interval_matches_per_player": 10,
+  "model": "probit_1d",
+  "ability_distribution": {
+    "type": "normal",
+    "mean": 0.0,
+    "std": 1.0
+  },
+  "performance_std": 1.0,
+  "matchmaking": "uniform_random",
+  "trials": [
+    {"ability": 2026113011, "matching": 2026113012, "result": 2026113013},
+    {"ability": 2026113021, "matching": 2026113022, "result": 2026113023},
+    {"ability": 2026113031, "matching": 2026113032, "result": 2026113033},
+    {"ability": 2026113041, "matching": 2026113042, "result": 2026113043},
+    {"ability": 2026113051, "matching": 2026113052, "result": 2026113053},
+    {"ability": 2026113061, "matching": 2026113062, "result": 2026113063},
+    {"ability": 2026113071, "matching": 2026113072, "result": 2026113073},
+    {"ability": 2026113081, "matching": 2026113082, "result": 2026113083},
+    {"ability": 2026113091, "matching": 2026113092, "result": 2026113093},
+    {"ability": 2026113101, "matching": 2026113102, "result": 2026113103}
+  ],
+  "glicko2_parameter_sets": [
+    {"initial_rd": 350, "initial_volatility": 0.06, "tau": 0.5},
+    {"initial_rd": 250, "initial_volatility": 0.005, "tau": 0.3},
+    {"initial_rd": 250, "initial_volatility": 0.005, "tau": 0.5},
+    {"initial_rd": 250, "initial_volatility": 0.06, "tau": 0.5},
+    {"initial_rd": 350, "initial_volatility": 0.005, "tau": 0.5}
+  ]
+}

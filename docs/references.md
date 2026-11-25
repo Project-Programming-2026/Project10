@@ -21,4 +21,4 @@
 - 原典・版：[Glickman, *Example of the Glicko-2 system*, 2022-03-22版](https://www.glicko.net/glicko/glicko2.pdf)。Step 1〜8と、Step 5のIllinois法（収束判定 `ε = 0.000001`、`f(C)f(B) ≤ 0` で `A ← B`）を[調整実験用の実装](../src/ratings/glicko2_tunable.cpp)に採用する。尺度の変換は原典の `173.7178` を使う。
 - 対戦予測：原典に2人の勝率の式はない。既存の[glicko2.cpp](../src/ratings/glicko2.cpp)と同じく、Glicko（初代）の予測式に両者のRDを合成して渡す。計算には[Glicko（初代）の実装](../src/ratings/glicko.cpp)の関数を使う。
 - 数値計算：Step 5の反復は、原典の1万回の試算で最大19回だった。1,000回を超えたら収束失敗として停止する。vの逆数が0や非有限になった場合も、正常値に置き換えずに停止する。
-- 検証：原典の計算例（r′ = 1464.06、RD′ = 151.52、σ′ = 0.05999）と、既定値での既存実装の予測・最終レートを[単体テスト](../tests/glicko2_tunable_tests.cpp)で照合する。
+- 検証：原典の計算例（r′ = 1464.06、RD′ = 151.52、σ′ = 0.05999）と、既定値での既存実装の予測・最終レートを[単体テスト](../tests/glicko2_tunable_tests.cpp)で照合する。実験の条件と結果は[Glicko-2の収束調整実験](glicko2-tuning.md)に記録する。

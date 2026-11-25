@@ -541,7 +541,7 @@ runs/run_XXXX/graphs/
 
 ### Glicko-2のパラメータ調整実験
 
-`project10_glicko2_tuning` は、Glicko-2の初期RD・初期ボラティリティ・τを変えてMSEの推移を比べる実験用のコマンドです。既存の `project10_predict`・`project10_run` のGlicko-2の動作は変えていません。
+`project10_glicko2_tuning` は、Glicko-2の初期RD・初期ボラティリティ・τを変えてMSEの推移を比べる実験用のコマンドです。既存の `project10_predict`・`project10_run` のGlicko-2の動作は変えていません。初期条件で行った調整の設定・結果・注意点は[Glicko-2の収束調整実験](docs/glicko2-tuning.md)に記録しています。
 
 ```sh
 ./build/release/project10_glicko2_tuning 設定JSON 出力ディレクトリ
