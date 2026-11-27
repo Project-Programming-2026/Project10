@@ -1,0 +1,67 @@
+cmake_minimum_required(VERSION 3.20)
+# 少人数で「生成→全履歴推定→共通のMSE評価」を通し、正解情報なしで推定できること、
+# 上書き拒否、不正な引数の拒否を確認する。
+string(RANDOM LENGTH 12 ALPHABET 0123456789abcdef suffix)
+set(work "${TEST_ROOT}/whole-history-${suffix}")
+set(run "${work}/runs/run_0000")
+file(MAKE_DIRECTORY "${work}/configs/run_0000" "${work}/hidden")
+file(READ "${SAMPLE_CONFIG}" config)
+string(JSON config SET "${config}" num_players 8)
+string(JSON config SET "${config}" matches_per_player 20)
+string(JSON config SET "${config}" rating_period_matches_per_player 10)
+string(JSON config SET "${config}" evaluation_interval_matches_per_player 10)
+file(WRITE "${work}/configs/run_0000/config.json" "${config}")
+
+function(invoke expected_error)
+  execute_process(COMMAND ${ARGN} WORKING_DIRECTORY "${work}" INPUT_FILE "${work}/stdin.txt"
+    RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 60)
+  if(expected_error STREQUAL "")
+    if(NOT result STREQUAL "0")
+      message(FATAL_ERROR "実行に失敗しました: ${output}${error}")
+    endif()
+  elseif(result STREQUAL "0" OR NOT error MATCHES "${expected_error}")
+    message(FATAL_ERROR "想定したエラーを確認できませんでした。\n想定: ${expected_error}\n実際: ${result} ${output}${error}")
+  endif()
+endfunction()
+
+file(WRITE "${work}/stdin.txt" "0\n")
+invoke("" "${GENERATOR}")
+
+# 潜在能力と正解勝率を隠しても推定できること。
+foreach(name latent_parameters.csv ground_truth.csv)
+  file(RENAME "${run}/${name}" "${work}/hidden/${name}")
+endforeach()
+file(WRITE "${work}/stdin.txt" "")
+invoke("" "${PROGRAM}" 0 210 whole_history.csv)
+file(STRINGS "${run}/whole_history.csv" rows)
+list(LENGTH rows count)
+list(GET rows 0 header)
+# 2評価時点 × 28ペアとヘッダー。
+if(NOT count EQUAL 57 OR NOT header STREQUAL "run_id,matches_per_player,player_a,player_b,predicted_p_a_wins")
+  message(FATAL_ERROR "予測CSVの行数またはヘッダーが想定と異なります")
+endif()
+
+# 既存の出力は上書きしない。失敗時にロックを残さない。
+file(SHA256 "${run}/whole_history.csv" before)
+invoke("出力先がすでに存在します" "${PROGRAM}" 0 210 whole_history.csv)
+file(SHA256 "${run}/whole_history.csv" after)
+if(NOT before STREQUAL after OR EXISTS "${work}/runs/.run_0000.lock")
+  message(FATAL_ERROR "既存の予測が変更されたか、ロックが残りました")
+endif()
+foreach(arguments "0;0;other.csv" "0;abc;other.csv" "0;210;../other.csv" "0;210;other.txt" "1;210;other.csv")
+  invoke("エラー" "${PROGRAM}" ${arguments})
+endforeach()
+if(EXISTS "${run}/other.csv" OR EXISTS "${work}/runs/.run_0000.lock")
+  message(FATAL_ERROR "不正な引数で出力またはロックが残りました")
+endif()
+
+# 正解勝率を戻し、共通のMSE評価に通せること。
+foreach(name latent_parameters.csv ground_truth.csv)
+  file(RENAME "${work}/hidden/${name}" "${run}/${name}")
+endforeach()
+invoke("" "${EVALUATOR}" --input "Whole history" 0 runs/run_0000/whole_history.csv --name whole-history)
+file(STRINGS "${work}/runs/comparisons/whole-history/series_0001_mse.csv" mse)
+list(LENGTH mse mse_lines)
+if(NOT mse_lines EQUAL 3)
+  message(FATAL_ERROR "MSEの行数が想定と異なります")
+endif()

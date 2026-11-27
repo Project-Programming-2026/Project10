@@ -551,6 +551,17 @@ runs/run_XXXX/graphs/
 
 生成・評価と同じrunロックを使います。`plot.gp` は読み込んだ数値を内包するため、元CSVを変更せず再描画できます。再描画する場合も新しい作業ディレクトリにコピーし、そこで `gnuplot -d plot.gp` を実行してください。正式な結果では既存の再現性規約どおりコード・入力ハッシュ・gnuplotの版も別途記録します。複数runの平均・標準偏差・信頼区間は今回の実装範囲外です。
 
+### 全履歴推定の予測
+
+`project10_whole_history` は、評価時点ごとにそれまでの全試合から全員のレートを推定し直す方法で、予測CSVを出力します。能力が変化しないことを前提とします。原典と採用範囲は[参考資料](docs/references.md#全履歴推定)を参照してください。
+
+```sh
+./build/dev/project10_whole_history 1 210 whole_history.csv
+./build/dev/project10_evaluate --input "全履歴推定" 1 runs/run_0001/whole_history.csv --name whole-history-mse
+```
+
+引数はrun ID、事前分布のRD（レート尺度）、出力ファイル名です。出力は `runs/run_XXXX/` 直下に保存し、既存のファイルは上書きしません。潜在能力と正解勝率は読みません。MSEは任意CSVの評価モードで共通の評価に通します。先手条件付きのrunには対応していません。
+
 ### 共通CSVの共有
 
 各担当が同じ入力を取得できるよう、[samples/run_0001/](samples/run_0001/README.md) に1,000人分の `players.csv` と100,000試合の `matches.csv`、設定・SHA-256・生成来歴をGit管理しています。CSVは合計約1.92MBです。取得後にハッシュを照合し、全手法へこの同じ2つのCSVを行順を保って渡します。正式な比較への採用はチーム確認事項です。
