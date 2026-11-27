@@ -21,3 +21,10 @@
 - 仕様の出発点は[第13回会議（2026-11-13）の拡張案](https://app.notion.com/p/416751d0ef6d809181a2f75fca13dbcc)。同ページの案を採用する利用者の実装依頼に基づく。正式なシード組・試行数・低／高の尺度は未確定。
 - 数式の参照：[NIST Dataplot Reference Manual, LOGCDF（1997-03-20）](https://www.itl.nist.gov/div898/software/dataplot/refman2/ch8/logcdf.pdf)、式8-261・8-262と標準偏差`pi/sqrt(3)`。文献の尺度記号`σ`を本実装では`s_g`とし、プロビットの各人の標準偏差`σ_g`と区別する。
 - [採用した式・尺度変換・数値安定化・独立検証](win-models.md)を参照。レーティング推定器の数式は変更しない。
+
+## 全履歴推定
+
+- 原典・版：[Coulom, *Whole-History Rating: A Bayesian Rating System for Players of Time-Varying Strength*](https://www.remi-coulom.fr/WHR/WHR.pdf)（PDFの作成日は2008-04-10）。§2.2のBradley–Terryモデルによる全履歴の事後最頻値と、§3.3の「相手を事後最頻値に固定し、1人分のヘッセ行列から不確実性を近似する」方法を[全履歴推定の実装](../src/ratings/whole_history.cpp)に採用する。§3.1と同じく、1人ずつニュートン法で更新する。
+- 原典との違い：能力の時間変化（Wiener過程）を入れない。事前分布は仮想の1勝1敗ではなく、全員に共通の正規分布 N(1500, RD₀²) とする。尺度はGlicko-2と同じ173.7178で、`μ = (r − 1500) / 173.7178` がBradley–Terryモデルの自然尺度にあたる。予測は原典にないGlicko（初代）の式に両者のRDを渡す。
+- 数値計算：対数事後確率は事前分布により厳密に凹になる。1人分の更新幅がすべて1e-10（Glicko-2尺度）以下になったら収束とし、10万回の反復で収束しなければ停止する。
+- 検証：2人・1試合の場合の二分法による解、ランダムな対戦での勾配0とヘッセ行列によるRD、試合順と記録の向きへの不依存を[単体テスト](../tests/whole_history_tests.cpp)で照合する。
