@@ -61,7 +61,62 @@
 - 組み方を変えると対戦履歴が変わる。同じ履歴で推定方法を比べる主実験とは別の結果として扱う。チームメイトのスキルマッチ（PR #41）と目的が重なるため、組み方の採用は調整が必要。
 - 今のGlicko-2は、レートの近い相手が続くと10試合ごとの期間更新で古いレートを使い続けるためか、sortedで悪化した（原因は未確認）。組み方を変える場合は推定方法も一緒に検討する必要がある。
 - 能力が変化しないことを前提にしている。毎ラウンド全履歴推定をやり直すため、1,000人・200ラウンドで1試行約30〜40秒かかる（Apple M4、1スレッド）。
-- ランダム対戦での1試合の情報量は、真の勝率が一様分布になるため平均 E(1−E) = 1/6 で、互角の対戦の1/4より小さい。実力の近い相手を組ませる効果はこの差で説明できると考えられる（仮説）。
+- ランダム対戦での1試合の情報量は、真の勝率が一様分布になるため平均 E(1−E) = 1/6 で、互角の対戦の1/4より小さい。ただし、後述のとおり実力がほぼ同じ相手だけと組ませると大きく悪化する。近い相手を組ませる効果は、この情報量の差だけでは説明できない。
+
+## 組み方の改良（追加の探索）
+
+今の最良（sampled λ = 0.5、評価用で0.0051860）からさらに20%下げる（0.00415以下）ことを目指して、組み方を追加で試した。結論として、この目標には届いていない。最良は近い64人から選ぶ方法で、評価用10試行で0.0050967だった。sampled λ = 0.5より1.7%低いが、改善した試行は10試行中7試行（−5.6〜+4.2%）で、差ははっきりしない。ランダム対戦＋今のGlicko-2との差は−23.4%（10/10、−28.7〜−20.0%）。
+
+追加した組み方（`design_probe.cpp`）は次のとおり。どれも推定レートだけから決める。
+
+| 組み方 | 内容 |
+| --- | --- |
+| offset | 推定レートで並べ、奇数ラウンドは並びを1つずらして隣どうしを組ませる（同じ相手が続くのを避ける） |
+| window（w） | 推定レートで並べ、w人ずつのまとまりの中で無作為に組ませる。まとまりの開始位置は毎ラウンド無作為にずらす |
+| mixed（w、k） | kラウンドに1回はrandom、それ以外はwindow |
+
+上限の目安として、真の能力を使う組み方も試した（提案手法ではない）。
+
+| 組み方 | 内容 |
+| --- | --- |
+| true_sorted | 真の能力で並べて隣どうしを組ませる |
+| true_window（w） | 真の能力で並べ、windowと同じくw人ずつのまとまりの中で組ませる |
+
+調整用5試行の結果（全履歴推定のMSEの平均）：
+
+| 組み方 | MSEの平均 |
+| --- | --- |
+| random | 0.0058577 |
+| sampled λ = 0.5（今の最良） | 0.0050460 |
+| offset | 0.0051594 |
+| window w = 4・16・64・128・256・512 | 0.0051345・0.0051003・**0.0049437**・0.0051228・0.0051118・0.0051970 |
+| mixed（w, k）=（64, 4）・（16, 4）・（64, 2）・（16, 2） | 0.0050959・0.0052755・0.0054788・0.0054995 |
+| true_sorted（4試行で停止） | 0.0857（0.0836〜0.0890） |
+| true_window w = 16 | 0.0874727 |
+
+分かったこと：
+
+- **推定方法の側には余地がない。** 生成モデルを知る推定器（上限の目安）で同じ履歴を推定しても、randomで0.6%、window w = 64で0.4%しか下がらない。
+- **実力がほぼ同じ相手だけと組ませると、大きく悪化する。** true_sortedは毎ラウンド同じ相手と当たり、対戦の網が500組に分かれてつながらない。true_windowは勝敗がほぼ五分五分の試合ばかりになり、レート全体の幅を決める情報が集まらない。どちらもMSEが今の最良の約17倍になった。ある程度実力差のある相手とも組ませる必要があり、windowの最良（w = 64）はその中間にあたる。
+- **序盤の改善が難しい。** MSEの平均は序盤の評価時点が大部分を占める（10試合時点だけで約25%）。序盤は推定レートの情報が少なく、近い相手を選べないため、組み方の工夫が効きにくい。20%の追加改善が届かなかった主な理由と考えられる（仮説）。
+
+## 結果のCSV
+
+[results/](results/)に、評価用10試行の平均を保存した。グラフの描画にもこの値を使った。
+
+| ファイル | 内容 |
+| --- | --- |
+| `curves.csv` | 系列ごと・評価時点ごとのMSEの平均（`experiment,series,label,matches_per_player,mean_mse`） |
+| `summary.csv` | 系列ごとのMSEの平均、基準との差（試行ごとの比の平均）、最小・最大、改善した試行数 |
+
+`experiment` は2種類ある。`fixed_history` は既存の生成（`generateMatches`）のランダム対戦で、全手法に同じ履歴を渡したもの。基準は今のGlicko-2。`matching` は組み方ごとに履歴が変わるもので、基準はランダム対戦＋今のGlicko-2。抽出元は次のとおり。
+
+| 系列 | 抽出元 |
+| --- | --- |
+| `fixed_history` の `baseline`・`tuned` | `docs/glicko2-tuning/evaluation/curves.csv`・`trials.csv` の `set_id` 1・3 |
+| `fixed_history` の `whole`・`oracle` | `refit_probe logistic 210 1 evaluation`・`refit_probe oracle 0 0 evaluation` の出力 |
+| `matching` の `random_g2`・`sampled_wh`・`sorted_g2` | `matching_probe` の `random`・`sampled`（λ 0.5）・`sorted`（いずれも事前分布のRD 210、評価用）の出力 |
+| `matching` の `window_wh` | `design_probe window evaluation --window 64` の出力 |
 
 ## 再現
 
@@ -72,6 +127,10 @@ c++ -std=c++17 -O3 -Iinclude experiments/matching/matching_probe.cpp build/relea
 ./build/release/matching_probe random 210 evaluation
 ./build/release/matching_probe sampled 210 evaluation 0.5
 ./build/release/matching_probe sorted 210 evaluation
+c++ -std=c++17 -O3 -Iinclude experiments/matching/design_probe.cpp build/release/libproject10_core.a -o build/release/design_probe
+./build/release/design_probe window evaluation --window 64
+./build/release/design_probe window tuning --window 64
+./build/release/design_probe mixed tuning --window 64 --random-every 4
 ```
 
 環境：macOS 26.6.2、Apple M4、Apple clang 17.0.0、CMake 4.4.4、Ninja 1.13.2。

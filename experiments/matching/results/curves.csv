@@ -1,0 +1,161 @@
+experiment,series,label,matches_per_player,mean_mse
+fixed_history,baseline,今のGlicko-2（RD 350・σ 0.06・τ 0.5）,10,0.031020956798208064
+fixed_history,baseline,今のGlicko-2（RD 350・σ 0.06・τ 0.5）,20,0.018130436783726507
+fixed_history,baseline,今のGlicko-2（RD 350・σ 0.06・τ 0.5）,30,0.012455538664151255
+fixed_history,baseline,今のGlicko-2（RD 350・σ 0.06・τ 0.5）,40,0.009706619939935929
+fixed_history,baseline,今のGlicko-2（RD 350・σ 0.06・τ 0.5）,50,0.007904835930658227
+fixed_history,baseline,今のGlicko-2（RD 350・σ 0.06・τ 0.5）,60,0.00657828463526592
+fixed_history,baseline,今のGlicko-2（RD 350・σ 0.06・τ 0.5）,70,0.005663623416292333
+fixed_history,baseline,今のGlicko-2（RD 350・σ 0.06・τ 0.5）,80,0.004889535236586558
+fixed_history,baseline,今のGlicko-2（RD 350・σ 0.06・τ 0.5）,90,0.0043362631821723605
+fixed_history,baseline,今のGlicko-2（RD 350・σ 0.06・τ 0.5）,100,0.00392966335646077
+fixed_history,baseline,今のGlicko-2（RD 350・σ 0.06・τ 0.5）,110,0.0035787495337069215
+fixed_history,baseline,今のGlicko-2（RD 350・σ 0.06・τ 0.5）,120,0.003261812461823328
+fixed_history,baseline,今のGlicko-2（RD 350・σ 0.06・τ 0.5）,130,0.003048521684943739
+fixed_history,baseline,今のGlicko-2（RD 350・σ 0.06・τ 0.5）,140,0.0028719452438691014
+fixed_history,baseline,今のGlicko-2（RD 350・σ 0.06・τ 0.5）,150,0.002710815458862052
+fixed_history,baseline,今のGlicko-2（RD 350・σ 0.06・τ 0.5）,160,0.002576017315055451
+fixed_history,baseline,今のGlicko-2（RD 350・σ 0.06・τ 0.5）,170,0.0024591366103700455
+fixed_history,baseline,今のGlicko-2（RD 350・σ 0.06・τ 0.5）,180,0.0023583578967245585
+fixed_history,baseline,今のGlicko-2（RD 350・σ 0.06・τ 0.5）,190,0.0022457263034866616
+fixed_history,baseline,今のGlicko-2（RD 350・σ 0.06・τ 0.5）,200,0.0021529791622602926
+fixed_history,tuned,調整済みGlicko-2（RD 250・σ 0.005・τ 0.5）,10,0.029629349538844763
+fixed_history,tuned,調整済みGlicko-2（RD 250・σ 0.005・τ 0.5）,20,0.01698262144100232
+fixed_history,tuned,調整済みGlicko-2（RD 250・σ 0.005・τ 0.5）,30,0.011753233589403642
+fixed_history,tuned,調整済みGlicko-2（RD 250・σ 0.005・τ 0.5）,40,0.009175439117238317
+fixed_history,tuned,調整済みGlicko-2（RD 250・σ 0.005・τ 0.5）,50,0.007506506739562763
+fixed_history,tuned,調整済みGlicko-2（RD 250・σ 0.005・τ 0.5）,60,0.006263924144486334
+fixed_history,tuned,調整済みGlicko-2（RD 250・σ 0.005・τ 0.5）,70,0.005400128590228651
+fixed_history,tuned,調整済みGlicko-2（RD 250・σ 0.005・τ 0.5）,80,0.004677133559810183
+fixed_history,tuned,調整済みGlicko-2（RD 250・σ 0.005・τ 0.5）,90,0.004145628847269111
+fixed_history,tuned,調整済みGlicko-2（RD 250・σ 0.005・τ 0.5）,100,0.003747650557760756
+fixed_history,tuned,調整済みGlicko-2（RD 250・σ 0.005・τ 0.5）,110,0.003405008495326621
+fixed_history,tuned,調整済みGlicko-2（RD 250・σ 0.005・τ 0.5）,120,0.003095413314072939
+fixed_history,tuned,調整済みGlicko-2（RD 250・σ 0.005・τ 0.5）,130,0.002876723515640381
+fixed_history,tuned,調整済みGlicko-2（RD 250・σ 0.005・τ 0.5）,140,0.0026904414733054933
+fixed_history,tuned,調整済みGlicko-2（RD 250・σ 0.005・τ 0.5）,150,0.0025176829629196197
+fixed_history,tuned,調整済みGlicko-2（RD 250・σ 0.005・τ 0.5）,160,0.00237753125352198
+fixed_history,tuned,調整済みGlicko-2（RD 250・σ 0.005・τ 0.5）,170,0.0022466794519577144
+fixed_history,tuned,調整済みGlicko-2（RD 250・σ 0.005・τ 0.5）,180,0.0021310507529515186
+fixed_history,tuned,調整済みGlicko-2（RD 250・σ 0.005・τ 0.5）,190,0.00201237409466318
+fixed_history,tuned,調整済みGlicko-2（RD 250・σ 0.005・τ 0.5）,200,0.001913769345447753
+fixed_history,whole,全履歴推定（事前分布のRD 210）,10,0.02670164548306518
+fixed_history,whole,全履歴推定（事前分布のRD 210）,20,0.015485056270173419
+fixed_history,whole,全履歴推定（事前分布のRD 210）,30,0.010802093280808672
+fixed_history,whole,全履歴推定（事前分布のRD 210）,40,0.008502352420748429
+fixed_history,whole,全履歴推定（事前分布のRD 210）,50,0.007015779709371678
+fixed_history,whole,全履歴推定（事前分布のRD 210）,60,0.005893563949233878
+fixed_history,whole,全履歴推定（事前分布のRD 210）,70,0.005110198680382054
+fixed_history,whole,全履歴推定（事前分布のRD 210）,80,0.004459684706092399
+fixed_history,whole,全履歴推定（事前分布のRD 210）,90,0.0039669627068709325
+fixed_history,whole,全履歴推定（事前分布のRD 210）,100,0.0035972730151044353
+fixed_history,whole,全履歴推定（事前分布のRD 210）,110,0.0032720544559312463
+fixed_history,whole,全履歴推定（事前分布のRD 210）,120,0.002982961611988824
+fixed_history,whole,全履歴推定（事前分布のRD 210）,130,0.0027792840932314156
+fixed_history,whole,全履歴推定（事前分布のRD 210）,140,0.0026050118735442642
+fixed_history,whole,全履歴推定（事前分布のRD 210）,150,0.002443659139266518
+fixed_history,whole,全履歴推定（事前分布のRD 210）,160,0.00231363279138495
+fixed_history,whole,全履歴推定（事前分布のRD 210）,170,0.0021919647657027003
+fixed_history,whole,全履歴推定（事前分布のRD 210）,180,0.0020821963368567575
+fixed_history,whole,全履歴推定（事前分布のRD 210）,190,0.0019687357755872547
+fixed_history,whole,全履歴推定（事前分布のRD 210）,200,0.0018720725926259904
+fixed_history,oracle,上限の目安（生成モデルを知る推定器）,10,0.026735494533021865
+fixed_history,oracle,上限の目安（生成モデルを知る推定器）,20,0.015446802998914901
+fixed_history,oracle,上限の目安（生成モデルを知る推定器）,30,0.010758378020597648
+fixed_history,oracle,上限の目安（生成モデルを知る推定器）,40,0.008451354265408164
+fixed_history,oracle,上限の目安（生成モデルを知る推定器）,50,0.00696409673041931
+fixed_history,oracle,上限の目安（生成モデルを知る推定器）,60,0.005847188045150055
+fixed_history,oracle,上限の目安（生成モデルを知る推定器）,70,0.005068045694917913
+fixed_history,oracle,上限の目安（生成モデルを知る推定器）,80,0.004418315063569227
+fixed_history,oracle,上限の目安（生成モデルを知る推定器）,90,0.0039249913576845305
+fixed_history,oracle,上限の目安（生成モデルを知る推定器）,100,0.003552084773183252
+fixed_history,oracle,上限の目安（生成モデルを知る推定器）,110,0.0032278566219713987
+fixed_history,oracle,上限の目安（生成モデルを知る推定器）,120,0.00293845404880548
+fixed_history,oracle,上限の目安（生成モデルを知る推定器）,130,0.0027358049958310245
+fixed_history,oracle,上限の目安（生成モデルを知る推定器）,140,0.002559322386194199
+fixed_history,oracle,上限の目安（生成モデルを知る推定器）,150,0.0023982613572176197
+fixed_history,oracle,上限の目安（生成モデルを知る推定器）,160,0.002267744165614278
+fixed_history,oracle,上限の目安（生成モデルを知る推定器）,170,0.0021452771177331376
+fixed_history,oracle,上限の目安（生成モデルを知る推定器）,180,0.002033603524556677
+fixed_history,oracle,上限の目安（生成モデルを知る推定器）,190,0.0019214578964975196
+fixed_history,oracle,上限の目安（生成モデルを知る推定器）,200,0.0018258359138754187
+matching,random_g2,ランダム対戦＋今のGlicko-2,10,0.0313008965060922
+matching,random_g2,ランダム対戦＋今のGlicko-2,20,0.0185307102491161
+matching,random_g2,ランダム対戦＋今のGlicko-2,30,0.012826064238259792
+matching,random_g2,ランダム対戦＋今のGlicko-2,40,0.009726501178003066
+matching,random_g2,ランダム対戦＋今のGlicko-2,50,0.007785905930173609
+matching,random_g2,ランダム対戦＋今のGlicko-2,60,0.006475523488914391
+matching,random_g2,ランダム対戦＋今のGlicko-2,70,0.005623312574987489
+matching,random_g2,ランダム対戦＋今のGlicko-2,80,0.004933898324326728
+matching,random_g2,ランダム対戦＋今のGlicko-2,90,0.0043847259889280635
+matching,random_g2,ランダム対戦＋今のGlicko-2,100,0.003983342948037619
+matching,random_g2,ランダム対戦＋今のGlicko-2,110,0.003616301818098989
+matching,random_g2,ランダム対戦＋今のGlicko-2,120,0.0033277347125592114
+matching,random_g2,ランダム対戦＋今のGlicko-2,130,0.0030758886788531626
+matching,random_g2,ランダム対戦＋今のGlicko-2,140,0.002918230409291581
+matching,random_g2,ランダム対戦＋今のGlicko-2,150,0.002750499226929039
+matching,random_g2,ランダム対戦＋今のGlicko-2,160,0.002625062743974718
+matching,random_g2,ランダム対戦＋今のGlicko-2,170,0.002477190203249923
+matching,random_g2,ランダム対戦＋今のGlicko-2,180,0.002331715374368067
+matching,random_g2,ランダム対戦＋今のGlicko-2,190,0.0022245680886684807
+matching,random_g2,ランダム対戦＋今のGlicko-2,200,0.002120455183045622
+matching,sampled_wh,揺らぎを加えて並べる（λ = 0.5）＋全履歴推定,10,0.026281826189521327
+matching,sampled_wh,揺らぎを加えて並べる（λ = 0.5）＋全履歴推定,20,0.014540615654080604
+matching,sampled_wh,揺らぎを加えて並べる（λ = 0.5）＋全履歴推定,30,0.009745587834047251
+matching,sampled_wh,揺らぎを加えて並べる（λ = 0.5）＋全履歴推定,40,0.007399051311603677
+matching,sampled_wh,揺らぎを加えて並べる（λ = 0.5）＋全履歴推定,50,0.005976700206542628
+matching,sampled_wh,揺らぎを加えて並べる（λ = 0.5）＋全履歴推定,60,0.004977253921014491
+matching,sampled_wh,揺らぎを加えて並べる（λ = 0.5）＋全履歴推定,70,0.0042823234605733574
+matching,sampled_wh,揺らぎを加えて並べる（λ = 0.5）＋全履歴推定,80,0.0037778305727011806
+matching,sampled_wh,揺らぎを加えて並べる（λ = 0.5）＋全履歴推定,90,0.0033616961903078905
+matching,sampled_wh,揺らぎを加えて並べる（λ = 0.5）＋全履歴推定,100,0.0030178510756156784
+matching,sampled_wh,揺らぎを加えて並べる（λ = 0.5）＋全履歴推定,110,0.0027510636349271857
+matching,sampled_wh,揺らぎを加えて並べる（λ = 0.5）＋全履歴推定,120,0.00250373498779177
+matching,sampled_wh,揺らぎを加えて並べる（λ = 0.5）＋全履歴推定,130,0.0023148017143806727
+matching,sampled_wh,揺らぎを加えて並べる（λ = 0.5）＋全履歴推定,140,0.002174219634378444
+matching,sampled_wh,揺らぎを加えて並べる（λ = 0.5）＋全履歴推定,150,0.0020363543588462815
+matching,sampled_wh,揺らぎを加えて並べる（λ = 0.5）＋全履歴推定,160,0.0019262668180219553
+matching,sampled_wh,揺らぎを加えて並べる（λ = 0.5）＋全履歴推定,170,0.001807151967772173
+matching,sampled_wh,揺らぎを加えて並べる（λ = 0.5）＋全履歴推定,180,0.0016962045551622781
+matching,sampled_wh,揺らぎを加えて並べる（λ = 0.5）＋全履歴推定,190,0.0016119961576724164
+matching,sampled_wh,揺らぎを加えて並べる（λ = 0.5）＋全履歴推定,200,0.0015382421437298704
+matching,window_wh,近い64人から選ぶ＋全履歴推定,10,0.025595393357337612
+matching,window_wh,近い64人から選ぶ＋全履歴推定,20,0.014282429396151413
+matching,window_wh,近い64人から選ぶ＋全履歴推定,30,0.009719419742760553
+matching,window_wh,近い64人から選ぶ＋全履歴推定,40,0.007389411731739414
+matching,window_wh,近い64人から選ぶ＋全履歴推定,50,0.005954663878739834
+matching,window_wh,近い64人から選ぶ＋全履歴推定,60,0.00493015454587561
+matching,window_wh,近い64人から選ぶ＋全履歴推定,70,0.0041919306056295794
+matching,window_wh,近い64人から選ぶ＋全履歴推定,80,0.003663824313533794
+matching,window_wh,近い64人から選ぶ＋全履歴推定,90,0.0032487759015514014
+matching,window_wh,近い64人から選ぶ＋全履歴推定,100,0.0029230334983615706
+matching,window_wh,近い64人から選ぶ＋全履歴推定,110,0.002681097943982344
+matching,window_wh,近い64人から選ぶ＋全履歴推定,120,0.0024785592314156032
+matching,window_wh,近い64人から選ぶ＋全履歴推定,130,0.0023080141568351826
+matching,window_wh,近い64人から選ぶ＋全履歴推定,140,0.0021252473075984908
+matching,window_wh,近い64人から選ぶ＋全履歴推定,150,0.0019980592278025103
+matching,window_wh,近い64人から選ぶ＋全履歴推定,160,0.0018779858269977704
+matching,window_wh,近い64人から選ぶ＋全履歴推定,170,0.0017784867333548629
+matching,window_wh,近い64人から選ぶ＋全履歴推定,180,0.0016767492964213332
+matching,window_wh,近い64人から選ぶ＋全履歴推定,190,0.0015965087651043633
+matching,window_wh,近い64人から選ぶ＋全履歴推定,200,0.0015136876702480844
+matching,sorted_g2,推定レート順に並べる＋今のGlicko-2,10,0.03410433107708709
+matching,sorted_g2,推定レート順に並べる＋今のGlicko-2,20,0.020892393882752432
+matching,sorted_g2,推定レート順に並べる＋今のGlicko-2,30,0.014402938394893882
+matching,sorted_g2,推定レート順に並べる＋今のGlicko-2,40,0.010984979008389203
+matching,sorted_g2,推定レート順に並べる＋今のGlicko-2,50,0.00884231282302056
+matching,sorted_g2,推定レート順に並べる＋今のGlicko-2,60,0.007476257705922364
+matching,sorted_g2,推定レート順に並べる＋今のGlicko-2,70,0.0065390409431819166
+matching,sorted_g2,推定レート順に並べる＋今のGlicko-2,80,0.005858879302462032
+matching,sorted_g2,推定レート順に並べる＋今のGlicko-2,90,0.005292303282718514
+matching,sorted_g2,推定レート順に並べる＋今のGlicko-2,100,0.004910949106767262
+matching,sorted_g2,推定レート順に並べる＋今のGlicko-2,110,0.004606052970710943
+matching,sorted_g2,推定レート順に並べる＋今のGlicko-2,120,0.004353726013974897
+matching,sorted_g2,推定レート順に並べる＋今のGlicko-2,130,0.004126863757701258
+matching,sorted_g2,推定レート順に並べる＋今のGlicko-2,140,0.003943172681146788
+matching,sorted_g2,推定レート順に並べる＋今のGlicko-2,150,0.0037965217991175956
+matching,sorted_g2,推定レート順に並べる＋今のGlicko-2,160,0.0036647606931087756
+matching,sorted_g2,推定レート順に並べる＋今のGlicko-2,170,0.0035287284493223797
+matching,sorted_g2,推定レート順に並べる＋今のGlicko-2,180,0.003413643151452837
+matching,sorted_g2,推定レート順に並べる＋今のGlicko-2,190,0.0033424730321078865
+matching,sorted_g2,推定レート順に並べる＋今のGlicko-2,200,0.003259895091822091
