@@ -154,7 +154,8 @@ void simurate(
                 );
                 std::bernoulli_distribution result(probability);
                 matches.push_back({
-                    static_cast<std::uint64_t>(totalMatches.size() + matches.size()), i,
+                    static_cast<std::uint64_t>(totalMatches.size() + matches.size()),
+                    static_cast<int>(totalMatches.size() + matches.size()) / (config.ratingPeriodMatchesPerPlayer * config.numPlayers / 2),
                     players.at(pair.first).id, players.at(pair.second).id, result(resultRng) ? 1 : 0, condition
                 });
             }
