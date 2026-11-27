@@ -13,10 +13,8 @@ namespace fs = filesystem;
 
 namespace{
 
-static fs::path output_file = "ranked_glicko2.csv";
 static fs::path input_file_rating = "samples/glicko_baseline/glicko2_rating.csv";
 static fs::path input_file_players = "players.csv";
-static fs::path input_file_matches = "matches.csv";
 static const double tau = 0.5; //ボラティリティの変動しやすさ
 static const double alpha = 0.25; //分布補正の最大補正幅
 static const double c = 0.01; //分布補正の感度
@@ -297,8 +295,8 @@ double predict(int i, int j){
     return 1 / (1 + pow(10,-g1(sqrt(pow(rdi,2)+pow(rdj,2)))*(ri-rj)/400));
 }
 
-void output(int run_id, int period, fs::path file_path){
-    ofstream out(file_path / output_file,ios::app);
+void output(int run_id, int period, fs::path file_path, fs::path output_win_prob_file){
+    ofstream out(file_path / output_win_prob_file,ios::app);
     sort(exist_player.begin(),exist_player.end());
     for(int i=0; i<(int)exist_player.size(); i++) for(int j=i+1; j<(int)exist_player.size();j++){
         int a = exist_player.at(i);
@@ -308,9 +306,10 @@ void output(int run_id, int period, fs::path file_path){
     out.close();
 }
 
-} //namespace
-
-void generate_ranked_glicko2_prediction(int run_id, fs::path file_path){
+void generate_ranked_glicko2_prediction_main(
+    int run_id, fs::path file_path,
+    fs::path input_file_matches, fs::path output_win_prob_file
+){
     string line;
     //プレイヤー登録
     ifstream in_players(file_path / input_file_players);
@@ -337,7 +336,7 @@ void generate_ranked_glicko2_prediction(int run_id, fs::path file_path){
         return;
     }
     //glicko2.csvの作成と1行目の記述
-    ofstream out(file_path / output_file);
+    ofstream out(file_path / output_win_prob_file);
     if(!out){
         cerr << "could not make glicko2.csv." << endl;
         return;
@@ -358,7 +357,7 @@ void generate_ranked_glicko2_prediction(int run_id, fs::path file_path){
         //period_idが変化したら、更新、集計
         if(stoi(row.at(1)) != current_period){
             update_all(ideal,current);
-            output(run_id,current_period,file_path);
+            output(run_id,current_period,file_path,output_win_prob_file);
             current_period = stoi(row.at(1));
         }
         //対戦結果の登録
@@ -372,8 +371,28 @@ void generate_ranked_glicko2_prediction(int run_id, fs::path file_path){
     in_matches.close();
     //最後に一回更新、集計
     update_all(ideal,current);
-    output(run_id,current_period,file_path);
+    output(run_id,current_period,file_path,output_win_prob_file);
     
     for(auto [_, player]:players) delete(player);
 }
 
+} //namespace
+
+void generate_ranked_glicko2_prediction(int run_id, fs::path file_path){
+    fs::path input_file_matches, output_win_prob_file;
+    cout << "Matches file name?: ";
+    cin >> input_file_matches;
+    cout << "Output file name (win probability)?: ";
+    cin >> output_win_prob_file;
+    generate_ranked_glicko2_prediction_main(
+        run_id, file_path,
+        input_file_matches, output_win_prob_file
+    );
+}
+
+void generate_ranked_glicko2_prediction(int run_id, fs::path file_path, fs::path input_file_matches, fs::path output_win_prob_file){
+    generate_ranked_glicko2_prediction_main(
+        run_id, file_path,
+        input_file_matches, output_win_prob_file
+    );
+}

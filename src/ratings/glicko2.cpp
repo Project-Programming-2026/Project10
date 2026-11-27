@@ -13,10 +13,8 @@ namespace fs = filesystem;
 
 namespace{
 
-static fs::path output_file = "glicko2.csv";
 static fs::path output_file_rating = "glicko2_rating.csv";
 static fs::path input_file_players = "players.csv";
-static fs::path input_file_matches = "matches.csv";
 static const double tau = 0.5; //ボラティリティの変動しやすさ
 static const double epsilon = 0.000001; //小さい定数
 static const double pi = atan(1) * 4;
@@ -171,8 +169,8 @@ double predict(int i, int j){
     return 1 / (1 + pow(10,-g1(sqrt(pow(rdi,2)+pow(rdj,2)))*(ri-rj)/400));
 }
 
-void output(int run_id, int period, fs::path file_path){
-    ofstream out(file_path / output_file,ios::app);
+void output(int run_id, int period, fs::path file_path, fs::path output_win_prob_file){
+    ofstream out(file_path / output_win_prob_file,ios::app);
     sort(exist_player.begin(),exist_player.end());
     for(int i=0; i<(int)exist_player.size(); i++) for(int j=i+1; j<(int)exist_player.size();j++){
         int a = exist_player.at(i);
@@ -182,9 +180,11 @@ void output(int run_id, int period, fs::path file_path){
     out.close();
 }
 
-} //namespace
-
-void generate_glicko2_prediction(int run_id, fs::path file_path){
+void generate_glicko2_prediction_main(
+    int run_id, fs::path file_path,
+    fs::path input_file_matches, fs::path output_win_prob_file,
+    bool create_baseline
+){
     string line;
     //プレイヤー登録
     ifstream in_players(file_path / input_file_players);
@@ -206,8 +206,8 @@ void generate_glicko2_prediction(int run_id, fs::path file_path){
         cerr << "could not open matches.csv." << endl;
         return;
     }
-    //glicko2.csvの作成と1行目の記述
-    ofstream out(file_path / output_file);
+    //出力ファイルの作成と1行目の記述
+    ofstream out(file_path / output_win_prob_file);
     if(!out){
         cerr << "could not make glicko2.csv." << endl;
         return;
@@ -228,7 +228,7 @@ void generate_glicko2_prediction(int run_id, fs::path file_path){
         //period_idが変化したら、更新、集計
         if(stoi(row.at(1)) != current_period){
             update_all();
-            output(run_id,current_period,file_path);
+            output(run_id,current_period,file_path,output_win_prob_file);
             current_period = stoi(row.at(1));
         }
         //対戦結果の登録
@@ -242,13 +242,76 @@ void generate_glicko2_prediction(int run_id, fs::path file_path){
     in_matches.close();
     //最後に一回更新、集計
     update_all();
-    output(run_id,current_period,file_path);
-    ofstream out_rating(file_path / output_file_rating);
-    out_rating << "rating" << endl;
-    for(int i=0; i<(int)exist_player.size(); i++){
-        int a = exist_player.at(i);
-        out_rating << players.at(a)->get_rate() << endl;
+    output(run_id,current_period,file_path,output_win_prob_file);
+    if(create_baseline){
+        ofstream out_rating(file_path / output_file_rating);
+        out_rating << "rating" << endl;
+        for(int i=0; i<(int)exist_player.size(); i++){
+            int a = exist_player.at(i);
+            out_rating << players.at(a)->get_rate() << endl;
+        }
+        out_rating.close();
     }
     for(auto [_, player]:players) delete(player);
+    players.clear();
+    exist_player.clear();
 }
 
+} //namespace
+
+void generate_glicko2_prediction(int run_id, fs::path file_path){
+    fs::path input_file_matches, output_win_prob_file, str;
+    bool create_baseline = false;
+    cout << "Matches file name?: ";
+    cin >> input_file_matches;
+    cout << "Output file name (win probability)?: ";
+    cin >> output_win_prob_file;
+    cout << "Do you create glicko2 baseline? (filename will be 'glicko2_rating.csv') [y/other]: ";
+    cin >> str;
+    if(str == "y") create_baseline = true;
+    generate_glicko2_prediction_main(
+        run_id, file_path,
+        input_file_matches, output_win_prob_file, create_baseline
+    );
+}
+
+void generate_glicko2_prediction(int run_id, fs::path file_path, fs::path input_file_matches, fs::path output_win_prob_file){
+    generate_glicko2_prediction_main(
+        run_id, file_path,
+        input_file_matches, output_win_prob_file, false
+    );
+}
+
+Glicko2System::Glicko2System(fs::path runDir){
+    string line;
+    ifstream in_players(runDir / input_file_players);
+    if(!in_players){
+        cerr << "could not open players.csv." << endl;
+        return;
+    }
+    getline(in_players,line); //一回読み飛ばす
+    while(getline(in_players,line)){
+        int id = stoi(line);
+        exist_player.push_back(id);
+        players.emplace(id,new Player(id));
+    }
+    in_players.close();
+}
+
+Glicko2System::~Glicko2System(){
+    for(auto [_, player]:players) delete(player);
+    players.clear();
+    exist_player.clear();
+}
+
+double Glicko2System::getRating(int playerId) const{
+    return players.at(playerId)->get_rate();
+}
+
+void Glicko2System::update(const vector<Match>& matches){
+    for(Match match: matches){
+        players.at(match.playerA)->push_result(match.resultA, match.playerB);
+        players.at(match.playerB)->push_result(1 - match.resultA, match.playerA);
+    }
+    update_all();
+}
