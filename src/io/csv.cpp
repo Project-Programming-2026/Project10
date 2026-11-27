@@ -1,6 +1,5 @@
 #include "project10/io/csv.hpp"
 #include "project10/io/run_lock.hpp"
-#include "project10/simulation/probit.hpp"
 
 #include <fstream>
 #include <iomanip>
@@ -66,9 +65,11 @@ void writeLatentParameters(
 
 void writeGroundTruth(
   const std::vector<double>& parameters,
-  double performanceStd,
+  const project10::simulation::WinProbabilityModel& model,
   const std::string& outputPath, double sideAdvantage, int condition
 ) {
+  // 不正なモデル・条件は出力ファイルを開く前に拒否する。
+  project10::simulation::winProbability(0, 0, model, sideAdvantage, condition);
   std::ofstream file(outputPath);
 
   if (!file.is_open()) {
@@ -85,10 +86,10 @@ void writeGroundTruth(
   // 自己対戦と逆順の重複を避け、i < jのペアだけを出力する。
   for (std::size_t i = 0; i < parameters.size(); i++) {
     for (std::size_t j = i + 1; j < parameters.size(); j++) {
-      const double probability = calculateConditionalWinProbability(
+      const double probability = project10::simulation::winProbability(
         parameters[i],
         parameters[j],
-        performanceStd, sideAdvantage, condition
+        model, sideAdvantage, condition
       );
 
       file << i << ',' << j << ','
@@ -103,6 +104,12 @@ void writeGroundTruth(
       "Failed to write: " + outputPath
     );
   }
+}
+
+void writeGroundTruth(const std::vector<double>& parameters, double performanceStd,
+  const std::string& path, double advantage, int condition) {
+  writeGroundTruth(parameters, project10::simulation::ProbitModel{performanceStd},
+    path, advantage, condition);
 }
 
 namespace project10::io {
@@ -258,6 +265,10 @@ void readPredictionsCsv(const std::string& path, evaluation::MseEvaluator& evalu
   consumePredictionsCsv(path, [&](const auto& row) { evaluator.addPrediction(row); });
 }
 
+void readPredictionsCsv(const std::string& path, evaluation::RankingEvaluator& evaluator) {
+  consumePredictionsCsv(path, [&](const auto& row) { evaluator.addPrediction(row); });
+}
+
 bool hasConditionalPredictions(const std::string& path) {
   std::ifstream file(path);
   std::string header;
@@ -308,7 +319,17 @@ int side(const std::string& value) {
   if (value != "1" && value != "-1") throw std::invalid_argument("条件zには1または-1を指定してください。");
   return value == "1" ? 1 : -1;
 }
+
+template <typename Consume>
+void consumeConditionalPredictionsCsv(const std::string& path, Consume consume) {
+  readCsv(path, "run_id,matches_per_player,player_a,player_b,z,predicted_p_a_wins", 6,
+    [&](const auto& fields) {
+      const evaluation::PredictionRow row{integer(fields[0]), integer(fields[1]),
+        integer(fields[2]), integer(fields[3]), probability(fields[5])};
+      consume(row, side(fields[4]));
+    });
 }
+}  // namespace
 
 void writeConditions(const std::vector<Match>& matches, const std::string& path) {
   std::ofstream file(path);
@@ -331,12 +352,16 @@ void readConditionsCsv(const std::string& path, std::vector<Match>& matches) {
 
 void readConditionalPredictionsCsv(const std::string& path,
   evaluation::MseEvaluator& positive, evaluation::MseEvaluator& negative) {
-  readCsv(path, "run_id,matches_per_player,player_a,player_b,z,predicted_p_a_wins", 6,
-    [&](const auto& fields) {
-      const evaluation::PredictionRow row{integer(fields[0]), integer(fields[1]),
-        integer(fields[2]), integer(fields[3]), probability(fields[5])};
-      (side(fields[4]) == 1 ? positive : negative).addPrediction(row);
-    });
+  consumeConditionalPredictionsCsv(path, [&](const evaluation::PredictionRow& row, int z) {
+    (z == 1 ? positive : negative).addPrediction(row);
+  });
+}
+
+void readConditionalPredictionsCsv(const std::string& path,
+  evaluation::RankingEvaluator& evaluator) {
+  consumeConditionalPredictionsCsv(path, [&](const evaluation::PredictionRow& row, int z) {
+    evaluator.addConditionalPrediction(row, z);
+  });
 }
 
 void readOnlinePredictionsCsv(const std::string& path,
@@ -400,6 +425,42 @@ void writeMseCsv(
   }
   file.close();
   if (!file) throw std::runtime_error("MSE出力ファイルへの書き込みに失敗しました: " + path);
+}
+
+std::vector<evaluation::RankingResult> readRankingCsv(
+  const std::string& path, int runID, int matchesPerPlayer, int interval, int numPlayers) {
+  if (runID < 0 || interval <= 0 || matchesPerPlayer < interval || numPlayers < 2)
+    throw std::invalid_argument("順位評価読み込みの評価設定が不正です。");
+  const double maxKendall = static_cast<double>(numPlayers) * (numPlayers - 1) / 2.0;
+  std::map<int, evaluation::RankingResult> points;
+  readCsv(path, "run_id,matches_per_player,kendall_distance,weighted_kendall_distance,normalized_weighted_kendall_distance", 5,
+    [&](const auto& f) {
+      if (integer(f[0]) != runID) throw std::invalid_argument("順位評価のrun IDが一致しません。");
+      const int cp = integer(f[1]);
+      if (cp <= 0 || cp > matchesPerPlayer || cp % interval != 0) throw std::invalid_argument("順位評価の評価時点が設定と一致しません。");
+      const double kendall = finiteValue(f[2]), weighted = finiteValue(f[3]);
+      if (kendall < 0.0 || kendall > maxKendall) throw std::invalid_argument("Kendall距離が範囲外です: " + f[2]);
+      if (weighted < 0.0) throw std::invalid_argument("重み付きKendall距離は0以上の有限な値で指定してください: " + f[3]);
+      if (!points.emplace(cp, evaluation::RankingResult{cp, kendall, weighted, probability(f[4], "正規化重み付きKendall距離")}).second)
+        throw std::invalid_argument("順位評価の評価時点が重複しています。");
+    });
+  if (points.size() != static_cast<std::size_t>(matchesPerPlayer / interval))
+    throw std::runtime_error("順位評価の評価時点が不足しています。手法間の比較条件が一致しません: " + path);
+  std::vector<evaluation::RankingResult> results;
+  for (const auto& p : points) results.push_back(p.second);
+  return results;
+}
+
+void writeRankingCsv(const std::string& path, int runID, const std::vector<evaluation::RankingResult>& results) {
+  if (std::filesystem::exists(std::filesystem::symlink_status(path))) throw std::runtime_error("順位評価出力先がすでに存在します: " + path);
+  std::ofstream file(path); if (!file) throw std::runtime_error("順位評価出力ファイルを開けません: " + path);
+  file.imbue(std::locale::classic());
+  file << "run_id,matches_per_player,kendall_distance,weighted_kendall_distance,normalized_weighted_kendall_distance\n"
+       << std::setprecision(std::numeric_limits<double>::max_digits10);
+  for (const auto& r : results)
+    file << runID << ',' << r.matchesPerPlayer << ',' << r.kendallDistance << ',' << r.weightedKendallDistance << ','
+         << r.normalizedWeightedKendallDistance << '\n';
+  file.close(); if (!file) throw std::runtime_error("順位評価出力ファイルへの書き込みに失敗しました: " + path);
 }
 
 void publishMseCsv(const std::string& temporaryPath, const std::string& outputPath) {

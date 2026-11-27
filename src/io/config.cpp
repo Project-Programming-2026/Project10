@@ -91,12 +91,40 @@ void validateExperimentSettings(const json& config) {
       throw std::runtime_error(std::string(field) + " must be a non-empty string.");
     }
   }
-  if (config.at("model") != "probit_1d") {
-    throw std::runtime_error("Only the probit_1d model is implemented.");
+  if (config.at("model") != "probit_1d" && config.at("model") != "logistic_1d") {
+    throw std::runtime_error("Unknown win probability model.");
   }
   if (config.at("matchmaking") != "uniform_random") {
     throw std::runtime_error("Only uniform_random round matching is implemented.");
   }
+}
+
+std::string algorithmStem(const std::string& algorithm) {
+  static const std::map<std::string, const char*> kStems{
+    {"Elo", "elo"}, {"Glicko", "glicko"}, {"Glicko2", "glicko2"},
+    {"rankedGlicko2", "ranked_glicko2"}, {"AdvantageElo", "advantage_elo"}, {"TrueSkill", "trueskill"}};
+  const auto it = kStems.find(algorithm);
+  if (it == kStems.end()) throw std::invalid_argument("未対応の手法名です: " + algorithm);
+  return it->second;
+}
+
+std::map<std::string, std::string> parsePlotCsvMap(const json& obj, const std::string& field, const char* label) {
+  if (!obj.is_object()) throw std::runtime_error(field + "はオブジェクトで指定してください。");
+  const auto methods = ratingMethods(true);
+  const std::set<std::string> algorithms(methods.begin(), methods.end());
+  std::set<std::string> names; std::map<std::string, std::string> mapped;
+  for (const auto& item : obj.items()) {
+    if (!algorithms.count(item.key())) throw std::runtime_error("未対応の手法名です: " + item.key());
+    const auto name = item.value().get<std::string>(); auto folded = name;
+    for (auto& c : folded) if (c >= 'A' && c <= 'Z') c += 'a' - 'A';
+    // run直下のCSVに限定。外部パス・制御文字・描画コマンドの混入を防ぐ。
+    if (name.size() <= 4 || name.substr(name.size() - 4) != ".csv" ||
+        name.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-.") != std::string::npos ||
+        name.find("..") != std::string::npos || !names.insert(folded).second)
+      throw std::runtime_error(std::string(label) + "ファイル名が不正か重複しています: " + name);
+    mapped.emplace(item.key(), name);
+  }
+  return mapped;
 }
 
 }  // namespace
@@ -136,10 +164,14 @@ SimulationConfig loadSimulationConfigFile(const std::filesystem::path& configPat
     config, "rating_period_matches_per_player", 1
   );
   validateExperimentSettings(config);
-  settings.performanceStd = readFiniteNumber(config, "performance_std");
-  if (settings.performanceStd <= 0.0) {
-    throw std::runtime_error("performance_std must be positive.");
-  }
+  const bool logistic = config.at("model") == "logistic_1d";
+  const auto* scaleField = logistic ? "logistic_scale" : "performance_std";
+  if (config.contains(logistic ? "performance_std" : "logistic_scale"))
+    throw std::runtime_error("モデルと尺度の指定が一致しません。尺度の併記はできません。");
+  const double scale = readFiniteNumber(config, scaleField);
+  if (scale <= 0) throw std::runtime_error(std::string(scaleField) + " must be positive.");
+  if (logistic) settings.winModel = simulation::LogisticModel{scale};
+  else settings.winModel = simulation::ProbitModel{scale};
 
   // 3. 潜在能力の生成に使う正規分布の平均と標準偏差を取得する。
   const auto& distribution = config.at("ability_distribution");
@@ -321,14 +353,7 @@ EvaluationContext loadEvaluationContext(int runID) {
 
 EvaluationConfig loadEvaluationConfig(int runID, const std::string& algorithm,
                                       const std::filesystem::path& root) {
-  std::string stem;
-  if (algorithm == "Elo") stem = "elo";
-  else if (algorithm == "Glicko") stem = "glicko";
-  else if (algorithm == "Glicko2") stem = "glicko2";
-  else if (algorithm == "rankedGlicko2") stem = "ranked_glicko2";
-  else if (algorithm == "AdvantageElo") stem = "advantage_elo";
-  else if (algorithm == "TrueSkill") stem = "trueskill";
-  else throw std::invalid_argument("未対応の手法名です: " + algorithm);
+  const std::string stem = algorithmStem(algorithm);
 
   const auto path = root / runDirectoryName(runID) / "config.json";
   try {
@@ -346,11 +371,17 @@ EvaluationConfig loadEvaluationConfig(int runID, const std::string& algorithm,
     const auto& files = config.at("files");
     settings.predictionsFile = files.at("predictions").at(algorithm).get<std::string>();
     settings.mseFile = files.at("mse").at(algorithm).get<std::string>();
+    settings.rankingFile = stem + "_ranking.csv";
+    if (files.contains("ranking")) {
+      if (!files.at("ranking").is_object()) throw std::runtime_error("files.rankingはオブジェクトで指定してください。");
+      if (files.at("ranking").contains(algorithm)) settings.rankingFile = files.at("ranking").at(algorithm).get<std::string>();
+    }
     // 既存の数値CSV契約に限定し、入力や別手法の結果への書き込みを防ぐ。
     if (files.at("players") != "players.csv" || files.at("ground_truth") != "ground_truth.csv" ||
-        settings.predictionsFile != stem + ".csv" || settings.mseFile != stem + "_mse.csv") {
+        (files.contains("latent_parameters") && files.at("latent_parameters") != "latent_parameters.csv") ||
+        settings.predictionsFile != stem + ".csv" || settings.mseFile != stem + "_mse.csv" ||
+        settings.rankingFile != stem + "_ranking.csv")
       throw std::runtime_error("評価用のファイル名が規定と一致していません。");
-    }
     return settings;
   } catch (const json::parse_error&) {
     throw std::runtime_error("設定JSONの構文が不正です: " + path.string());
@@ -366,9 +397,11 @@ PlotConfig loadPlotConfig(int runID, const std::filesystem::path& root) {
   try {
     const auto config = parseConfig(readConfigText(path));
     PlotConfig result{readInteger(config, "run_id", 0),
+                      readInteger(config, "num_players", 2),
                       readInteger(config, "matches_per_player", 1),
-                      readInteger(config, "evaluation_interval_matches_per_player", 1), {}, {}};
-    if (result.runID != runID || result.matchesPerPlayer < result.interval) {
+                      readInteger(config, "evaluation_interval_matches_per_player", 1), {}, {}, {}};
+    if (result.runID != runID || result.numPlayers % 2 != 0 ||
+        result.matchesPerPlayer < result.interval) {
       throw std::runtime_error("描画設定が不正か、run IDが一致していません。");
     }
     if (config.contains("comparison")) {
@@ -376,27 +409,10 @@ PlotConfig loadPlotConfig(int runID, const std::filesystem::path& root) {
       if (result.scenario != "S0" && result.scenario != "S1")
         throw std::runtime_error("比較シナリオはS0またはS1を指定してください。");
     }
-    const auto& files = config.at("files").at("mse");
-    if (!files.is_object()) throw std::runtime_error("files.mseはオブジェクトで指定してください。");
-    const auto methods = ratingMethods(true);
-    const std::set<std::string> algorithms(methods.begin(), methods.end());
-    std::set<std::string> names;
-    for (const auto& item : files.items()) {
-      if (algorithms.count(item.key()) == 0) {
-        throw std::runtime_error("未対応の手法名です: " + item.key());
-      }
-      const auto name = item.value().get<std::string>();
-      auto foldedName = name;
-      for (auto& c : foldedName) if (c >= 'A' && c <= 'Z') c += 'a' - 'A';
-      // run直下のCSVに限定。外部パス・制御文字・描画コマンドの混入を防ぐ。
-      if (name.size() <= 4 || name.substr(name.size() - 4) != ".csv" ||
-          name.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-.") !=
-            std::string::npos || name.find("..") != std::string::npos ||
-          !names.insert(foldedName).second) {
-        throw std::runtime_error("MSEファイル名が不正か重複しています: " + name);
-      }
-      result.mseFiles.emplace(item.key(), name);
-    }
+    const auto& files = config.at("files");
+    result.mseFiles = parsePlotCsvMap(files.at("mse"), "files.mse", "MSE");
+    if (files.contains("ranking")) result.rankingFiles = parsePlotCsvMap(files.at("ranking"), "files.ranking", "順位評価");
+    else for (const auto& [m, _] : result.mseFiles) result.rankingFiles.emplace(m, algorithmStem(m) + "_ranking.csv");
     return result;
   } catch (const json::exception&) {
     throw std::runtime_error("描画用の設定JSONの構文・必須項目・型を確認してください: " + path.string());
@@ -418,7 +434,8 @@ ratings::AdvantageEloParameters loadAdvantageParameters(int runID, const std::fi
 
 void writeRatingSnapshot(int runID, const std::filesystem::path& directory) {
   auto config = parseConfig(readConfigText(std::filesystem::path("runs") / runDirectoryName(runID) / "config.json"));
-  for (const auto* field : {"seeds", "ability_distribution", "performance_std"}) config.erase(field);
+  for (const auto* field : {"seeds", "ability_distribution", "performance_std", "logistic_scale", "model"})
+    config.erase(field);
   if (config.contains("comparison")) {
     config["comparison"].erase("side_advantage");
     config["comparison"].erase("condition_seed");
