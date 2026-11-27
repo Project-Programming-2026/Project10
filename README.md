@@ -351,6 +351,26 @@ JSONの未使用項目もスナップショットに残します。潜在能力�
 
 生成からグラフまでは `project10` → `project10_trueskill` → `project10_evaluate` → `project10_plot` の順に、各CLIへ同じrun IDを入力します。評価CLIでは続けて手法名 `TrueSkill` を入力します。
 
+### 予測CLIの任意ファイル入出力
+
+全6手法を扱う予測CLI（`project10_predict`・`project10_glicko`・`project10_trueskill`）では、既定の `matches.csv` や規定の出力ファイル名に加えて、コマンドラインオプションで入出力ファイルを任意に指定できます。既存の引数なし呼び出しと一括実行 `project10_run` の動作は変わりません。
+
+- `--matches <path>`: 対戦履歴CSVの入力パスを指定します（既定は `matches.csv`）。
+- `--output <path>`: 予測CSVの出力パスを指定します（既定は設定ファイルに記載された手法別の出力ファイル名）。
+- `--rating-output <path>`: `project10_predict` の `Glicko2` 実行時に最終レートCSVの出力先を指定します。`--output` だけを指定し `--rating-output` を省略した場合、既定の `glicko2_rating.csv` は作成しません。
+- `--conditions <path>`・`--online-output <path>`: `project10_predict` の比較用 `AdvantageElo` 実行時に、条件CSVの入力先と試合前予測ログの出力先を指定します。`--output` だけを指定し `--online-output` を省略した場合、既定の `online_predictions.csv` は作成しません。
+- パス解決と保護: ディレクトリ区切りを含まないファイル名だけを指定すると `runs/run_XXXX/` 配下に、ディレクトリ区切りを含む相対パスまたは絶対パスを指定するとその場所に解決します。既存の出力先やシンボリックリンクへの上書きは拒否し、対象runと出力先のロックを保持した状態で書き込みます。
+
+`project10_glicko` と `project10_trueskill` は位置引数で `runID` を渡すことも、省略して標準入力から渡すこともできます。各CLIの詳細は `--help` で表示できます。
+
+```sh
+./build/dev/project10_predict 0 Elo --matches alt_matches.csv --output elo_alt.csv
+./build/dev/project10_glicko 0 --matches alt_matches.csv --output glicko_alt.csv
+./build/dev/project10_trueskill 0 --matches alt_matches.csv --output trueskill_alt.csv
+```
+
+任意の出力CSVは、[任意CSVのMSE評価・比較描画](docs/csv-comparison.md)の手順に従って `project10_evaluate --input` で評価できます。
+
 ### 予測CSVのMSE評価
 
 生成済みの `runs/run_XXXX/` に、保存済みの `config.json`、`players.csv`、`ground_truth.csv` と、評価する1手法の予測CSVを用意します。`configs/` の現在の設定は読みません。TrueSkillの予測CSVは前節のCLIで生成できます。

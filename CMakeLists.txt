@@ -17,6 +17,7 @@ add_library(project10_core
   src/io/config.cpp
   src/io/csv.cpp
   src/io/process.cpp
+  src/io/rating_cli.cpp
   src/simulation/players.cpp
   src/simulation/latent_parameters.cpp
   src/simulation/probit.cpp
@@ -285,6 +286,16 @@ if(BUILD_TESTING)
     target_compile_options(advantage_elo_tests PRIVATE /utf-8)
   endif()
   add_test(NAME advantage_elo_unit COMMAND advantage_elo_tests)
+
+  add_test(NAME cli_custom_rating_io COMMAND "${CMAKE_COMMAND}"
+    "-DGENERATOR=$<TARGET_FILE:project10>" "-DPREDICT=$<TARGET_FILE:project10_predict>"
+    "-DGLICKO=$<TARGET_FILE:project10_glicko>" "-DTRUESKILL=$<TARGET_FILE:project10_trueskill>"
+    "-DEVALUATOR=$<TARGET_FILE:project10_evaluate>"
+    "-DSAMPLE_NORMAL=${CMAKE_CURRENT_SOURCE_DIR}/configs/run_0008/config.json"
+    "-DSAMPLE_COMPARISON=${CMAKE_CURRENT_SOURCE_DIR}/configs/run_0005/config.json"
+    "-DBASELINE=${CMAKE_CURRENT_SOURCE_DIR}/samples/glicko_baseline"
+    "-DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/test-work"
+    -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/custom_rating_io.cmake")
 
   foreach(case generation reproducibility invalid_input invalid_config duplicate_keys missing_config
       overwrite output_paths symlink_outputs hardlink_outputs run_lock initial_scale seed_roles)

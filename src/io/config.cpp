@@ -256,47 +256,77 @@ bool isFixedReferenceRun(int runID) {
   return true;
 }
 
-RatingConfig loadTrueSkillConfig(int runID) {
+RatingConfig loadTrueSkillConfig(int runID, bool customMatches, bool customOutput) {
   const auto path = std::filesystem::path("runs") / runDirectoryName(runID) / "config.json";
   const auto config = parseConfig(readConfigText(path));
+  const std::string predictionsFile = customOutput
+    ? std::string{}
+    : config.at("files").at("predictions").at("TrueSkill").get<std::string>();
   RatingConfig result{readInteger(config, "num_players", 2),
                       readInteger(config, "matches_per_player", 1),
                       readInteger(config, "evaluation_interval_matches_per_player", 1),
                       readInteger(config, "rating_period_matches_per_player", 1),
-                      config.at("files").at("predictions").at("TrueSkill").get<std::string>()};
+                      predictionsFile};
   if (readInteger(config, "run_id", 0) != runID || result.numPlayers % 2 != 0 ||
       result.matchesPerPlayer < result.interval) {
     throw std::runtime_error("TrueSkillの設定またはrun IDが不正です。");
   }
   const auto& files = config.at("files");
-  if (files.at("players") != "players.csv" || files.at("matches") != "matches.csv" ||
-      result.predictionsFile != "trueskill.csv") {
+  if (files.at("players") != "players.csv" ||
+      (!customMatches && files.at("matches") != "matches.csv") ||
+      (!customOutput && result.predictionsFile != "trueskill.csv")) {
     throw std::runtime_error("TrueSkillのファイル名が規定と一致していません。");
   }
   return result;
 }
 
 RatingConfig loadRatingConfig(int runID, const std::string& algorithm,
-                              const std::filesystem::path& root) {
-  const auto evaluation = loadEvaluationConfig(runID, algorithm, root);
-  const auto config = parseConfig(readConfigText(root / runDirectoryName(runID) / "config.json"));
-  if (config.at("files").at("matches") != "matches.csv") {
-    throw std::runtime_error("予測用のmatchesファイル名が規定と一致していません。");
+                              const std::filesystem::path& root,
+                              bool customMatches, bool customOutput) {
+  if (!customOutput) {
+    const auto evaluation = loadEvaluationConfig(runID, algorithm, root);
+    const auto config = parseConfig(readConfigText(root / runDirectoryName(runID) / "config.json"));
+    if (!customMatches && config.at("files").at("matches") != "matches.csv")
+      throw std::runtime_error("予測用のmatchesファイル名が規定と一致していません。");
+    return {evaluation.numPlayers, evaluation.matchesPerPlayer, evaluation.interval,
+            readInteger(config, "rating_period_matches_per_player", 1), evaluation.predictionsFile,
+            evaluation.conditional};
   }
-  return {evaluation.numPlayers, evaluation.matchesPerPlayer, evaluation.interval,
-          readInteger(config, "rating_period_matches_per_player", 1), evaluation.predictionsFile,
-          evaluation.conditional};
-}
-
-GlickoConfig loadGlickoConfig(int runID, const std::filesystem::path& root) {
+  algorithmStem(algorithm);
   const auto path = root / runDirectoryName(runID) / "config.json";
   try {
     const auto config = parseConfig(readConfigText(path));
+    RatingConfig result{readInteger(config, "num_players", 2), readInteger(config, "matches_per_player", 1),
+      readInteger(config, "evaluation_interval_matches_per_player", 1),
+      readInteger(config, "rating_period_matches_per_player", 1), {}, config.contains("comparison")};
+    if (readInteger(config, "run_id", 0) != runID || result.numPlayers % 2 != 0 || result.matchesPerPlayer < result.interval)
+      throw std::runtime_error("評価設定が不正か、run IDが一致していません。");
+    if (result.conditional) {
+      const auto s = config.at("comparison").at("scenario").get<std::string>();
+      if (s != "S0" && s != "S1") throw std::runtime_error("比較シナリオはS0またはS1を指定してください。");
+    }
+    const auto& files = config.at("files");
+    if (files.at("players") != "players.csv" || (!customMatches && files.at("matches") != "matches.csv"))
+      throw std::runtime_error("評価用のファイル名が規定と一致していません。");
+    return result;
+  } catch (const json::exception&) {
+    throw std::runtime_error("評価用の設定JSONの構文・必須項目・型を確認してください: " + path.string());
+  }
+}
+
+GlickoConfig loadGlickoConfig(int runID, const std::filesystem::path& root,
+                              bool customMatches, bool customOutput) {
+  const auto path = root / runDirectoryName(runID) / "config.json";
+  try {
+    const auto config = parseConfig(readConfigText(path));
+    const std::string predictionsFile = customOutput
+      ? std::string{}
+      : config.at("files").at("predictions").at("Glicko").get<std::string>();
     GlickoConfig result{{readInteger(config, "num_players", 2),
                          readInteger(config, "matches_per_player", 1),
                          readInteger(config, "evaluation_interval_matches_per_player", 1),
                          readInteger(config, "rating_period_matches_per_player", 1),
-                         config.at("files").at("predictions").at("Glicko").get<std::string>()},
+                         predictionsFile},
                         0.0, 0.0, 0.0};
     const auto& rating = result.rating;
     if (readInteger(config, "run_id", 0) != runID || rating.numPlayers % 2 != 0 ||
@@ -304,8 +334,9 @@ GlickoConfig loadGlickoConfig(int runID, const std::filesystem::path& root) {
       throw std::runtime_error("Glickoの設定またはrun IDが不正です。");
     }
     const auto& files = config.at("files");
-    if (files.at("players") != "players.csv" || files.at("matches") != "matches.csv" ||
-        rating.predictionsFile != "glicko.csv") {
+    if (files.at("players") != "players.csv" ||
+        (!customMatches && files.at("matches") != "matches.csv") ||
+        (!customOutput && rating.predictionsFile != "glicko.csv")) {
       throw std::runtime_error("Glickoのファイル名が規定と一致していません。");
     }
     // cは未決定のため既定値を置かず、使った値を設定のスナップショットに残す。

@@ -8,15 +8,13 @@
 #include <sstream>
 #include <iostream>
 #include <filesystem>
+#include <stdexcept>
 using namespace std;
 namespace fs = filesystem;
 
 namespace{
 
-static fs::path output_file = "glicko2.csv";
-static fs::path output_file_rating = "glicko2_rating.csv";
-static fs::path input_file_players = "players.csv";
-static fs::path input_file_matches = "matches.csv";
+static const fs::path input_file_players = "players.csv";
 static const double tau = 0.5; //ボラティリティの変動しやすさ
 static const double epsilon = 0.000001; //小さい定数
 static const double pi = atan(1) * 4;
@@ -171,8 +169,20 @@ double predict(int i, int j){
     return 1 / (1 + pow(10,-g1(sqrt(pow(rdi,2)+pow(rdj,2)))*(ri-rj)/400));
 }
 
-void output(int run_id, int period, fs::path file_path){
-    ofstream out(file_path / output_file,ios::app);
+struct PlayerRegistryGuard{
+    ~PlayerRegistryGuard(){
+        for(auto [_, player]:players) delete(player);
+        players.clear(); exist_player.clear();
+    }
+};
+
+fs::path resolve_path(const fs::path& base, const fs::path& target){
+    return (target.has_parent_path() || target.has_root_path() || target.has_root_name()) ? target : (base / target);
+}
+
+void output(int run_id, int period, const fs::path& output_path){
+    ofstream out(output_path,ios::app);
+    if(!out) throw runtime_error("could not open output file: " + output_path.string());
     sort(exist_player.begin(),exist_player.end());
     for(int i=0; i<(int)exist_player.size(); i++) for(int j=i+1; j<(int)exist_player.size();j++){
         int a = exist_player.at(i);
@@ -180,18 +190,23 @@ void output(int run_id, int period, fs::path file_path){
         out << run_id << "," << period*10 + 10 << "," << a << "," << b << "," << predict(a,b) << endl;
     }
     out.close();
+    if(!out) throw runtime_error("failed to write output file: " + output_path.string());
 }
 
 } //namespace
 
 void generate_glicko2_prediction(int run_id, fs::path file_path){
+    generate_glicko2_prediction(run_id, file_path, "matches.csv", "glicko2.csv", "glicko2_rating.csv");
+}
+
+void generate_glicko2_prediction(int run_id, fs::path file_path, fs::path matches_file, fs::path output_file, fs::path rating_output_file){
+    PlayerRegistryGuard guard;
+    const fs::path resolved_matches = resolve_path(file_path, matches_file);
+    const fs::path resolved_output = resolve_path(file_path, output_file);
     string line;
     //プレイヤー登録
     ifstream in_players(file_path / input_file_players);
-    if(!in_players){
-        cerr << "could not open players.csv." << endl;
-        return;
-    }
+    if(!in_players) throw runtime_error("could not open players.csv.");
     getline(in_players,line); //一回読み飛ばす
     while(getline(in_players,line)){
         int id = stoi(line);
@@ -201,19 +216,14 @@ void generate_glicko2_prediction(int run_id, fs::path file_path){
     in_players.close();
     //対戦
     int current_period = 0;
-    ifstream in_matches(file_path / input_file_matches);
-    if(!in_matches){
-        cerr << "could not open matches.csv." << endl;
-        return;
-    }
-    //glicko2.csvの作成と1行目の記述
-    ofstream out(file_path / output_file);
-    if(!out){
-        cerr << "could not make glicko2.csv." << endl;
-        return;
-    }
+    ifstream in_matches(resolved_matches);
+    if(!in_matches) throw runtime_error("could not open matches file: " + resolved_matches.string());
+    //出力ファイルの作成と1行目の記述
+    ofstream out(resolved_output);
+    if(!out) throw runtime_error("could not make output file: " + resolved_output.string());
     out << "run_id,matches_per_player,player_a,player_b,predicted_p_a_wins" << endl;
     out.close();
+    if(!out) throw runtime_error("failed to write output header: " + resolved_output.string());
     getline(in_matches,line); //一回読み飛ばす
     while(getline(in_matches,line)){
         stringstream ss(line);
@@ -221,14 +231,11 @@ void generate_glicko2_prediction(int run_id, fs::path file_path){
         vector<string> row;
         while(getline(ss,value,',')) row.push_back(value);
         //コメント行の処理をする場合ここに追加
-        if(row.size() != 5){
-            cerr << "invalid data in matches.csv." << endl;
-            return;
-        }
+        if(row.size() != 5) throw runtime_error("invalid data in matches file: " + resolved_matches.string());
         //period_idが変化したら、更新、集計
         if(stoi(row.at(1)) != current_period){
             update_all();
-            output(run_id,current_period,file_path);
+            output(run_id,current_period,resolved_output);
             current_period = stoi(row.at(1));
         }
         //対戦結果の登録
@@ -242,13 +249,18 @@ void generate_glicko2_prediction(int run_id, fs::path file_path){
     in_matches.close();
     //最後に一回更新、集計
     update_all();
-    output(run_id,current_period,file_path);
-    ofstream out_rating(file_path / output_file_rating);
-    out_rating << "rating" << endl;
-    for(int i=0; i<(int)exist_player.size(); i++){
-        int a = exist_player.at(i);
-        out_rating << players.at(a)->get_rate() << endl;
+    output(run_id,current_period,resolved_output);
+    if(!rating_output_file.empty()){
+        const fs::path resolved_rating = resolve_path(file_path, rating_output_file);
+        ofstream out_rating(resolved_rating);
+        if(!out_rating) throw runtime_error("could not make rating output file: " + resolved_rating.string());
+        out_rating << "rating" << endl;
+        for(int i=0; i<(int)exist_player.size(); i++){
+            int a = exist_player.at(i);
+            out_rating << players.at(a)->get_rate() << endl;
+        }
+        out_rating.close();
+        if(!out_rating) throw runtime_error("failed to write rating output file: " + resolved_rating.string());
     }
-    for(auto [_, player]:players) delete(player);
 }
 

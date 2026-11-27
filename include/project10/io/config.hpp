@@ -66,10 +66,11 @@ struct RatingConfig {
   bool conditional = false;
 };
 
-RatingConfig loadTrueSkillConfig(int runID);
+RatingConfig loadTrueSkillConfig(int runID, bool customMatches = false, bool customOutput = false);
 // rootをconfigsにすると、生成前に同じ検証を適用できる。
 RatingConfig loadRatingConfig(int runID, const std::string& algorithm,
-                              const std::filesystem::path& root = "runs");
+                              const std::filesystem::path& root = "runs",
+                              bool customMatches = false, bool customOutput = false);
 
 // Glicko（初代）の実行設定。初期値とc（rd_growth）は設定のglicko項目から読む。
 struct GlickoConfig {
@@ -79,7 +80,8 @@ struct GlickoConfig {
   double rdGrowth;
 };
 
-GlickoConfig loadGlickoConfig(int runID, const std::filesystem::path& root = "runs");
+GlickoConfig loadGlickoConfig(int runID, const std::filesystem::path& root = "runs",
+                              bool customMatches = false, bool customOutput = false);
 
 // configs/ではなく、生成結果に保存した設定を読む。
 EvaluationConfig loadEvaluationConfig(int runID, const std::string& algorithm,
