@@ -180,18 +180,11 @@ void output(int run_id, int period, fs::path file_path, fs::path output_win_prob
     out.close();
 }
 
-} //namespace
-
-void generate_glicko2_prediction(int run_id, fs::path file_path){
-    fs::path input_file_matches, output_win_prob_file, str;
-    bool create_baseline = false;
-    cout << "Matches file name?: ";
-    cin >> input_file_matches;
-    cout << "Output file name (win probability)?: ";
-    cin >> output_win_prob_file;
-    cout << "Do you create glicko2 baseline? (filename will be 'glicko2_rating.csv') [y/other]: ";
-    cin >> str;
-    if(str == "y") create_baseline = true;
+void generate_glicko2_prediction_main(
+    int run_id, fs::path file_path,
+    fs::path input_file_matches, fs::path output_win_prob_file,
+    bool create_baseline
+){
     string line;
     //プレイヤー登録
     ifstream in_players(file_path / input_file_players);
@@ -262,6 +255,31 @@ void generate_glicko2_prediction(int run_id, fs::path file_path){
     for(auto [_, player]:players) delete(player);
     players.clear();
     exist_player.clear();
+}
+
+} //namespace
+
+void generate_glicko2_prediction(int run_id, fs::path file_path){
+    fs::path input_file_matches, output_win_prob_file, str;
+    bool create_baseline = false;
+    cout << "Matches file name?: ";
+    cin >> input_file_matches;
+    cout << "Output file name (win probability)?: ";
+    cin >> output_win_prob_file;
+    cout << "Do you create glicko2 baseline? (filename will be 'glicko2_rating.csv') [y/other]: ";
+    cin >> str;
+    if(str == "y") create_baseline = true;
+    generate_glicko2_prediction_main(
+        run_id, file_path,
+        input_file_matches, output_win_prob_file, create_baseline
+    );
+}
+
+void generate_glicko2_prediction(int run_id, fs::path file_path, fs::path input_file_matches, fs::path output_win_prob_file){
+    generate_glicko2_prediction_main(
+        run_id, file_path,
+        input_file_matches, output_win_prob_file, false
+    );
 }
 
 Glicko2System::Glicko2System(fs::path runDir){

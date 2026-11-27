@@ -306,14 +306,10 @@ void output(int run_id, int period, fs::path file_path, fs::path output_win_prob
     out.close();
 }
 
-} //namespace
-
-void generate_ranked_glicko2_prediction(int run_id, fs::path file_path){
-    fs::path input_file_matches, output_win_prob_file;
-    cout << "Matches file name?: ";
-    cin >> input_file_matches;
-    cout << "Output file name (win probability)?: ";
-    cin >> output_win_prob_file;
+void generate_ranked_glicko2_prediction_main(
+    int run_id, fs::path file_path,
+    fs::path input_file_matches, fs::path output_win_prob_file
+){
     string line;
     //プレイヤー登録
     ifstream in_players(file_path / input_file_players);
@@ -380,3 +376,23 @@ void generate_ranked_glicko2_prediction(int run_id, fs::path file_path){
     for(auto [_, player]:players) delete(player);
 }
 
+} //namespace
+
+void generate_ranked_glicko2_prediction(int run_id, fs::path file_path){
+    fs::path input_file_matches, output_win_prob_file;
+    cout << "Matches file name?: ";
+    cin >> input_file_matches;
+    cout << "Output file name (win probability)?: ";
+    cin >> output_win_prob_file;
+    generate_ranked_glicko2_prediction_main(
+        run_id, file_path,
+        input_file_matches, output_win_prob_file
+    );
+}
+
+void generate_ranked_glicko2_prediction(int run_id, fs::path file_path, fs::path input_file_matches, fs::path output_win_prob_file){
+    generate_ranked_glicko2_prediction_main(
+        run_id, file_path,
+        input_file_matches, output_win_prob_file
+    );
+}
