@@ -1,0 +1,59 @@
+{
+  "schema_version": "1.0",
+  "num_players": 1000,
+  "matches_per_player": 200,
+  "rating_period_matches_per_player": 2,
+  "evaluation_interval_matches_per_player": 10,
+  "model": "probit_1d",
+  "ability_distribution": {
+    "type": "normal",
+    "mean": 0.0,
+    "std": 1.0
+  },
+  "performance_std": 1.0,
+  "matchmaking": "uniform_random",
+  "trials": [
+    {
+      "ability": 2026112511,
+      "matching": 2026112512,
+      "result": 2026112513
+    },
+    {
+      "ability": 2026112521,
+      "matching": 2026112522,
+      "result": 2026112523
+    },
+    {
+      "ability": 2026112531,
+      "matching": 2026112532,
+      "result": 2026112533
+    },
+    {
+      "ability": 2026112541,
+      "matching": 2026112542,
+      "result": 2026112543
+    },
+    {
+      "ability": 2026112551,
+      "matching": 2026112552,
+      "result": 2026112553
+    }
+  ],
+  "glicko2_parameter_sets": [
+    {
+      "initial_rd": [
+        150,
+        200,
+        250,
+        300,
+        350
+      ],
+      "initial_volatility": [
+        0.005,
+        0.02,
+        0.06
+      ],
+      "tau": 0.5
+    }
+  ]
+}
