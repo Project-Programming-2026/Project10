@@ -85,11 +85,15 @@ void simurate(
     std::mt19937_64 conditionRng(config.conditionSeed);
     std::bernoulli_distribution firstSide(0.5);
 
-    string str;
-    cout << "Output file name?: ";
-    cin >> str;
-    fs::path outputFileName(str);
+    fs::path outputMatchesFileName, outputConditionFileName = "errorFile";
+    cout << "Output file name (matches)?: ";
+    cin >> outputMatchesFileName;
+    if(config.conditional){
+        cout << "Output file name (condition)?: ";
+        cin >> outputConditionFileName;
+    }
 
+    string str;
     int ratingPeriodMatches = 1;
     cout << "Do you use rating period?(y/other): ";
     cin >> str;
@@ -181,8 +185,8 @@ void simurate(
         for(Player& p:players) p.rating = system.getRating(p.id);
         totalMatches.insert(totalMatches.end(),matches.begin(),matches.end());
     }
-    writeMatches(totalMatches, (runDir / outputFileName).string());
-    if(config.conditional) project10::io::writeConditions(totalMatches, (runDir / "conditions_S.csv").string());
+    writeMatches(totalMatches, (runDir / outputMatchesFileName).string());
+    if(config.conditional) project10::io::writeConditions(totalMatches, (runDir / outputConditionFileName).string());
 }
 
 }
