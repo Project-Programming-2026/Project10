@@ -143,36 +143,14 @@ void simurate(
         shuffle(players.begin(), players.end(), matchingRng);
         stable_sort(players.begin(),players.end(),[](const Player& p1, const Player& p2){return p1.rating < p2.rating;});
         vector<Match> matches;
-        /*
-        for(int j = 1; j <= ratingPeriodMatches; j++){
-            int startIdx = 0;
-            int idx = 0;
-            for(int k = 0; k < players.size(); k+=2){
-                const int condition = config.conditional ? (firstSide(conditionRng) ? 1 : -1) : 1;
-                const double probability = calculateConditionalWinProbability(
-                    players.at(idx).parameter, players.at(idx + j).parameter, config.performanceStd, config.sideAdvantage, condition
-                );
-                std::bernoulli_distribution result(probability);
-                matches.push_back({
-                    static_cast<std::uint64_t>(totalMatches.size() + matches.size()), i,
-                    players.at(idx).id, players.at(idx + j).id, result(resultRng) ? 1 : 0, condition
-                });
-                idx += 2 * j;
-                if(idx > players.size() - j){
-                    startIdx++;
-                    idx = startIdx;
-                }
-            }
-        }
-        */
         set<pair<int,int>> playedPairs;
         for (int j = 0; j < ratingPeriodMatches; ++j){
             vector<pair<int,int>> pairs = makeSkillPairs(players,playedPairs);
             for(pair<int,int> pair: pairs){
                 playedPairs.insert(minmax(players[pair.first].id, players[pair.second].id));
                 const int condition = config.conditional ? (firstSide(conditionRng) ? 1 : -1) : 1;
-                const double probability = calculateConditionalWinProbability(
-                    players.at(pair.first).parameter, players.at(pair.second).parameter, config.performanceStd, config.sideAdvantage, condition
+                const double probability = project10::simulation::winProbability(
+                    players.at(pair.first).parameter, players.at(pair.second).parameter, config.winModel, config.sideAdvantage, condition
                 );
                 std::bernoulli_distribution result(probability);
                 matches.push_back({
