@@ -95,8 +95,8 @@ set(ref_run "${ref_alt}/runs/run_0000")
 file(MAKE_DIRECTORY "${work}/external" "${work}/hidden")
 
 flip_last_column("${work_run}/matches.csv" "${work_run}/alt_matches.csv" "0" "1")
-file(COPY_FILE "${work_run}/alt_matches.csv" "${work}/external/ext_matches.csv")
-file(COPY_FILE "${work_run}/alt_matches.csv" "${ref_run}/matches.csv")
+configure_file("${work_run}/alt_matches.csv" "${work}/external/ext_matches.csv" COPYONLY)
+configure_file("${work_run}/alt_matches.csv" "${ref_run}/matches.csv" COPYONLY)
 
 file(RENAME "${work_run}/ground_truth.csv" "${work}/hidden/ground_truth.csv")
 file(RENAME "${work_run}/latent_parameters.csv" "${work}/hidden/latent_parameters.csv")
